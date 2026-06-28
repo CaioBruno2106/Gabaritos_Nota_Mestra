@@ -4,12 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
-<title>Leitor de Gabaritos - V2</title>
+<title>Leitor de Gabaritos</title>
 
+<!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
+<!-- Google Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 
@@ -109,31 +111,84 @@ html, body {
   transition: all 0.2s; user-select: none; -webkit-tap-highlight-color: transparent;
 }
 .btn:active { transform: scale(0.97); }
-.btn-primary { background: var(--blue); color: #fff; box-shadow: var(--shadow-sm); }
+.btn-primary {
+  background: var(--blue); color: #fff;
+  box-shadow: var(--shadow-sm);
+}
 .btn-primary:hover { background: var(--blue2); }
-.btn-cyan { background: var(--cyan); color: var(--navy); box-shadow: var(--glow-cyan); }
+.btn-cyan {
+  background: var(--cyan); color: var(--navy);
+  box-shadow: var(--glow-cyan);
+}
 .btn-cyan:hover { background: var(--cyan2); }
-.btn-ghost { background: transparent; color: var(--text-muted); border: 1.5px solid var(--border); }
+.btn-ghost {
+  background: transparent; color: var(--text-muted);
+  border: 1.5px solid var(--border);
+}
 .btn-ghost:hover { background: var(--surface2); color: var(--text); }
-.btn-danger { background: rgba(230,57,70,0.15); color: var(--red); border: 1.5px solid rgba(230,57,70,0.3); }
+.btn-danger {
+  background: rgba(230,57,70,0.15); color: var(--red);
+  border: 1.5px solid rgba(230,57,70,0.3);
+}
 .btn-danger:hover { background: rgba(230,57,70,0.25); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
 
+/* Google button */
+.btn-google {
+  background: #fff; color: #3c4043;
+  font-weight: 600; font-size: 15px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+.btn-google:hover { background: #f8f9fa; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+.google-icon {
+  width: 20px; height: 20px; flex-shrink: 0;
+}
+
 /* Input */
 .input-group { display: flex; flex-direction: column; gap: 6px; }
-.input-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-muted); text-transform: uppercase; }
-.input, .textarea, .select {
+.input-label {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+  color: var(--text-muted); text-transform: uppercase;
+}
+.input {
   background: var(--surface2); border: 1.5px solid var(--border);
   border-radius: var(--r-md); padding: 12px 14px;
   color: var(--text); font-family: var(--font); font-size: 15px;
   transition: border-color 0.2s, box-shadow 0.2s;
   width: 100%; outline: none;
 }
-.textarea { resize: vertical; min-height: 100px; }
-.input:focus, .textarea:focus, .select:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,180,216,0.15); }
+.input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,180,216,0.15); }
+.input::placeholder { color: var(--text-dim); }
+.input-code {
+  font-family: var(--mono); font-size: 22px; font-weight: 700;
+  text-align: center; letter-spacing: 0.18em; text-transform: uppercase;
+}
 
 /* Card */
-.card { background: var(--surface); border: 1px solid var(--border2); border-radius: var(--r-lg); padding: 20px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--r-lg); padding: 20px;
+}
+.card-sm { padding: 14px 16px; border-radius: var(--r-md); }
+
+/* Badge */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: var(--r-full);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+}
+.badge-cyan { background: rgba(0,180,216,0.15); color: var(--cyan); }
+.badge-yellow { background: rgba(245,166,35,0.15); color: var(--yellow); }
+.badge-blue  { background: rgba(26,86,160,0.25); color: #6BAEFF; }
+
+/* Divider */
+.divider {
+  display: flex; align-items: center; gap: 12px;
+  color: var(--text-dim); font-size: 12px; font-weight: 500;
+}
+.divider::before, .divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border2);
+}
 
 /* Toast */
 #toast-container {
@@ -149,482 +204,1449 @@ html, body {
   box-shadow: var(--shadow-md);
   animation: toast-in 0.25s ease; width: 100%; text-align: center;
 }
-@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.toast.error { border-color: rgba(230,57,70,0.5); color: #FF8A8A; }
+.toast.success { border-color: rgba(0,180,216,0.4); color: var(--cyan); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Spinner */
+.spinner {
+  width: 20px; height: 20px; flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: currentColor;
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ═══════════════════════════════════════════════
-   LAYOUT PRINCIPAL
+   ÍCONE / LOGO
 ═══════════════════════════════════════════════ */
-#screen-app { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--navy); }
+.app-icon {
+  width: 64px; height: 64px; border-radius: 18px;
+  background: linear-gradient(135deg, var(--blue) 0%, var(--cyan) 100%);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--glow-blue);
+  flex-shrink: 0;
+}
+.app-icon svg { width: 34px; height: 34px; }
+.app-icon-sm {
+  width: 38px; height: 38px; border-radius: 10px;
+}
+.app-icon-sm svg { width: 20px; height: 20px; }
+
+/* ═══════════════════════════════════════════════
+   TELA: SPLASH
+═══════════════════════════════════════════════ */
+#screen-splash {
+  position: fixed; inset: 0;
+  background: var(--navy);
+  display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 20px;
+  z-index: 100;
+  animation: fade-in 0.3s ease;
+}
+.splash-logo-wrap {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+}
+.splash-reticle {
+  position: relative; width: 80px; height: 80px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--blue) 0%, #0D6EFD 50%, var(--cyan) 100%);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 40px rgba(0,180,216,0.35), 0 0 80px rgba(26,86,160,0.2);
+}
+.splash-reticle svg { width: 44px; height: 44px; }
+.splash-scan {
+  position: absolute; width: 100%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  border-radius: 1px; box-shadow: var(--glow-cyan);
+  animation: scan-line 1.8s ease-in-out infinite;
+  top: 0; left: 0;
+}
+@keyframes scan-line {
+  0%   { top: 8px;  opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { top: 72px; opacity: 0; }
+}
+.splash-title {
+  font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: var(--text);
+}
+.splash-sub {
+  font-size: 13px; color: var(--text-muted); font-weight: 500;
+}
+.splash-spinner {
+  width: 24px; height: 24px;
+  border: 2px solid rgba(0,180,216,0.2);
+  border-top-color: var(--cyan);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+
+/* ═══════════════════════════════════════════════
+   TELA: LOGIN
+═══════════════════════════════════════════════ */
+#screen-login {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  background: var(--navy);
+}
+
+.login-hero {
+  flex: 1; min-height: 280px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 40px 24px 32px;
+  position: relative; overflow: hidden;
+}
+
+/* Grade de bolhas decorativa — elemento assinatura */
+.bubble-grid {
+  position: absolute; inset: 0;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(6, 1fr);
+  gap: 6px; padding: 20px; opacity: 0.18;
+  pointer-events: none;
+}
+.bubble-cell {
+  border-radius: 50%;
+  border: 1.5px solid var(--cyan);
+  aspect-ratio: 1;
+}
+.bubble-cell.filled {
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+/* Linha de scan sobre a grade */
+.hero-scan-line {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent 5%, var(--cyan) 30%, var(--cyan2) 50%, var(--cyan) 70%, transparent 95%);
+  box-shadow: 0 0 12px 2px rgba(0,180,216,0.6);
+  animation: hero-scan 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes hero-scan {
+  0%   { top: 15%; opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { top: 85%; opacity: 0; }
+}
+
+.login-hero-content {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  text-align: center;
+}
+.login-hero-icon {
+  width: 80px; height: 80px; border-radius: 22px;
+  background: linear-gradient(135deg, var(--blue) 0%, var(--cyan) 100%);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 40px rgba(0,180,216,0.4), var(--shadow-lg);
+  position: relative; overflow: hidden;
+}
+.login-hero-icon svg { width: 44px; height: 44px; }
+.login-title {
+  font-size: 26px; font-weight: 900; letter-spacing: -0.03em; color: var(--text);
+  line-height: 1.1;
+}
+.login-title span { color: var(--cyan); }
+.login-sub {
+  font-size: 14px; color: var(--text-muted); font-weight: 400;
+  max-width: 240px; line-height: 1.5;
+}
+
+.login-card {
+  background: var(--surface); border-top: 1px solid var(--border2);
+  border-radius: 24px 24px 0 0;
+  padding: 28px 24px calc(24px + var(--safe-bottom));
+  display: flex; flex-direction: column; gap: 16px;
+}
+.login-card-title {
+  font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -0.01em;
+}
+.login-card-sub {
+  font-size: 13px; color: var(--text-muted); line-height: 1.5;
+  margin-top: -8px;
+}
+.login-terms {
+  font-size: 11px; color: var(--text-dim); text-align: center; line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════════════
+   TELA: ONBOARDING
+═══════════════════════════════════════════════ */
+#screen-onboarding {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  background: var(--navy); overflow-y: auto;
+}
+
+.onboarding-header {
+  padding: 52px 24px 24px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.onboarding-step-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--cyan);
+}
+.onboarding-title {
+  font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: var(--text);
+  line-height: 1.2;
+}
+.onboarding-sub {
+  font-size: 14px; color: var(--text-muted); line-height: 1.5; margin-top: 4px;
+}
+
+.onboarding-body {
+  flex: 1; padding: 0 24px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.onboarding-footer {
+  padding: 24px 24px calc(24px + var(--safe-bottom));
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+/* Opções de escola */
+.escola-option {
+  background: var(--surface); border: 2px solid var(--border2);
+  border-radius: var(--r-lg); padding: 18px;
+  display: flex; align-items: flex-start; gap: 14px;
+  cursor: pointer; transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.escola-option:active { transform: scale(0.98); }
+.escola-option.selected {
+  border-color: var(--cyan);
+  background: rgba(0,180,216,0.07);
+  box-shadow: 0 0 0 1px rgba(0,180,216,0.2);
+}
+.escola-option-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-size: 20px;
+}
+.escola-option-icon.create { background: rgba(0,180,216,0.15); }
+.escola-option-icon.join   { background: rgba(26,86,160,0.2); }
+.escola-option-info { flex: 1; }
+.escola-option-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.escola-option-sub   { font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
+
+/* Step indicator */
+.step-dots {
+  display: flex; gap: 6px; align-items: center; justify-content: center;
+  padding: 8px 0;
+}
+.step-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border); transition: all 0.3s;
+}
+.step-dot.active { background: var(--cyan); width: 18px; border-radius: 3px; }
+
+/* Código gerado */
+.code-display {
+  background: var(--navy); border: 2px solid var(--border);
+  border-radius: var(--r-lg); padding: 20px;
+  text-align: center; position: relative;
+}
+.code-display-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 8px;
+}
+.code-display-value {
+  font-family: var(--mono); font-size: 32px; font-weight: 700;
+  color: var(--cyan); letter-spacing: 0.18em;
+}
+.code-display-hint {
+  font-size: 12px; color: var(--text-dim); margin-top: 8px;
+}
+.code-copy-btn {
+  position: absolute; top: 12px; right: 12px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 6px 10px;
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  cursor: pointer; transition: all 0.2s;
+}
+.code-copy-btn:hover { background: var(--surface3); color: var(--text); }
+
+/* ═══════════════════════════════════════════════
+   LAYOUT PRINCIPAL (após login)
+═══════════════════════════════════════════════ */
+#screen-app {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  background: var(--navy);
+}
+
+/* Top bar */
 .topbar {
-  height: 56px; flex-shrink: 0; padding: 0 20px;
+  height: 56px; flex-shrink: 0;
+  padding: 0 20px;
   display: flex; align-items: center; justify-content: space-between;
   background: var(--navy); border-bottom: 1px solid var(--border2);
+  padding-top: env(safe-area-inset-top, 0);
 }
-.topbar-title { font-size: 16px; font-weight: 800; color: var(--text); }
+.topbar-left { display: flex; align-items: center; gap: 10px; }
+.topbar-logo-icon {
+  width: 32px; height: 32px; border-radius: 9px;
+  background: linear-gradient(135deg, var(--blue), var(--cyan));
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.topbar-logo-icon svg { width: 18px; height: 18px; }
+.topbar-title {
+  font-size: 16px; font-weight: 800; letter-spacing: -0.01em; color: var(--text);
+}
+.topbar-escola {
+  font-size: 11px; color: var(--text-muted); font-weight: 500; line-height: 1;
+}
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+.topbar-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--surface2); border: 2px solid var(--border);
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: var(--cyan); cursor: pointer;
+  flex-shrink: 0;
+}
+.topbar-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Conteúdo scrollável */
 .app-content {
   flex: 1; overflow-y: auto; overflow-x: hidden;
-  padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 80px);
+  padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 8px);
 }
+
+/* Bottom nav */
 .bottom-nav {
   position: absolute; bottom: 0; left: 0; right: 0;
-  height: calc(var(--nav-h) + var(--safe-bottom)); padding-bottom: var(--safe-bottom);
+  height: calc(var(--nav-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
   background: var(--surface); border-top: 1px solid var(--border2);
-  display: flex; align-items: flex-start; z-index: 50;
+  display: flex; align-items: flex-start;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+  z-index: 50;
 }
 .nav-item {
-  flex: 1; height: var(--nav-h); display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 3px; cursor: pointer;
+  flex: 1; height: var(--nav-h);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s; position: relative;
 }
-.nav-item span { font-size: 10px; font-weight: 600; color: var(--text-dim); }
+.nav-item svg { width: 22px; height: 22px; color: var(--text-dim); transition: all 0.2s; }
+.nav-item span {
+  font-size: 10px; font-weight: 600; color: var(--text-dim);
+  transition: all 0.2s; letter-spacing: 0.02em;
+}
+.nav-item.active svg  { color: var(--cyan); }
 .nav-item.active span { color: var(--cyan); }
+.nav-item.active::after {
+  content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 28px; height: 2px; background: var(--cyan);
+  border-radius: 0 0 3px 3px; box-shadow: var(--glow-cyan);
+}
 
-/* LISTAS CRUD */
-.list-container { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.list-item {
+/* ═══════════════════════════════════════════════
+   VIEWS DO APP
+═══════════════════════════════════════════════ */
+
+/* Dashboard / Início */
+.dash-header {
+  padding: 20px 20px 16px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.dash-greeting {
+  font-size: 13px; color: var(--text-muted); font-weight: 500;
+}
+.dash-name {
+  font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: var(--text);
+}
+
+.dash-escola-card {
+  margin: 0 16px 16px;
+  background: linear-gradient(135deg, rgba(26,86,160,0.4) 0%, rgba(0,180,216,0.2) 100%);
+  border: 1px solid rgba(0,180,216,0.25);
+  border-radius: var(--r-lg); padding: 16px 18px;
+  display: flex; align-items: center; gap: 14px;
+}
+.dash-escola-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: rgba(0,180,216,0.2); display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+}
+.dash-escola-info { flex: 1; min-width: 0; }
+.dash-escola-name {
+  font-size: 15px; font-weight: 700; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dash-escola-code {
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+  color: var(--cyan); letter-spacing: 0.12em; margin-top: 2px;
+}
+
+.dash-section-title {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-muted); padding: 0 20px 10px;
+}
+
+.dash-stats {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 16px 16px;
+}
+.stat-card {
   background: var(--surface); border: 1px solid var(--border2);
-  border-radius: var(--r-md); padding: 16px;
-  display: flex; align-items: center; justify-content: space-between;
+  border-radius: var(--r-lg); padding: 16px;
+  display: flex; flex-direction: column; gap: 6px;
 }
-.list-item-title { font-weight: 700; color: var(--text); font-size: 15px; }
-.list-item-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-.fab {
-  position: fixed; bottom: calc(var(--nav-h) + var(--safe-bottom) + 16px); right: 16px;
-  width: 56px; height: 56px; border-radius: 28px; background: var(--cyan);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: var(--shadow-lg), var(--glow-cyan); cursor: pointer; z-index: 40;
-  font-size: 24px; color: var(--navy); border: none;
+.stat-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--text-muted);
 }
+.stat-value {
+  font-size: 28px; font-weight: 900; letter-spacing: -0.02em; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.stat-value.cyan { color: var(--cyan); }
+.stat-value.yellow { color: var(--yellow); }
+.stat-value.blue { color: #6BAEFF; }
 
-/* WIZARD PROVAS */
-.wizard-step { display: none; flex-direction: column; gap: 16px; }
-.wizard-step.active { display: flex; }
-.bubble-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
-.bubble-num { width: 30px; font-size: 12px; font-weight: bold; color: var(--text-muted); text-align: right; }
-.bubble-btn {
-  width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--border);
-  background: transparent; color: var(--text-dim); font-weight: bold; cursor: pointer;
+.dash-quick-actions {
+  padding: 0 16px 16px;
+  display: flex; flex-direction: column; gap: 10px;
 }
-.bubble-btn.selected { background: var(--cyan); border-color: var(--cyan); color: var(--navy); }
+.quick-action {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--r-lg); padding: 16px 18px;
+  display: flex; align-items: center; gap: 14px; cursor: pointer;
+  transition: all 0.2s; -webkit-tap-highlight-color: transparent;
+}
+.quick-action:active { transform: scale(0.98); background: var(--surface2); }
+.quick-action-icon {
+  width: 42px; height: 42px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  font-size: 20px;
+}
+.quick-action-icon.green  { background: rgba(0,200,130,0.15); }
+.quick-action-icon.yellow { background: rgba(245,166,35,0.15); }
+.quick-action-icon.blue   { background: rgba(26,86,160,0.2); }
+.quick-action-text { flex: 1; }
+.quick-action-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.quick-action-sub   { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+.quick-action-arrow { color: var(--text-dim); font-size: 18px; }
+
+/* Placeholder views */
+.placeholder-view {
+  padding: 24px 20px;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 300px; gap: 12px; text-align: center;
+}
+.placeholder-icon { font-size: 48px; opacity: 0.5; }
+.placeholder-title { font-size: 18px; font-weight: 700; color: var(--text-muted); }
+.placeholder-sub   { font-size: 14px; color: var(--text-dim); line-height: 1.5; max-width: 240px; }
+
+/* ── Vista: Mais ── */
+.mais-section { padding: 8px 16px; }
+.mais-section-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--text-dim); padding: 12px 4px 8px;
+}
+.mais-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px; border-radius: var(--r-md);
+  cursor: pointer; transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.mais-item:active { background: var(--surface2); }
+.mais-item-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.mais-item-text { flex: 1; }
+.mais-item-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.mais-item-sub   { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+.mais-item-arrow { color: var(--text-dim); }
+
+.mais-profile {
+  margin: 16px; background: var(--surface);
+  border: 1px solid var(--border2); border-radius: var(--r-lg);
+  padding: 18px; display: flex; align-items: center; gap: 14px;
+}
+.mais-avatar {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--surface2); border: 2px solid var(--border);
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 700; color: var(--cyan); flex-shrink: 0;
+}
+.mais-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.mais-profile-info { flex: 1; min-width: 0; }
+.mais-profile-name {
+  font-size: 16px; font-weight: 700; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mais-profile-email {
+  font-size: 12px; color: var(--text-muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 /* ═══════════════════════════════════════════════
    MODAL
 ═══════════════════════════════════════════════ */
 .modal-overlay {
-  position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.6);
-  display: flex; align-items: flex-end; justify-content: center;
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  display: flex; align-items: flex-end;
+  animation: fade-in 0.2s ease;
 }
 .modal {
-  background: var(--surface); border-radius: 24px 24px 0 0; width: 100%; max-width: 500px;
-  padding: 20px 20px calc(20px + var(--safe-bottom));
-  display: flex; flex-direction: column; gap: 16px; max-height: 90vh; overflow-y: auto;
+  background: var(--surface); border-radius: 24px 24px 0 0;
+  width: 100%; padding: 20px 20px calc(20px + var(--safe-bottom));
+  display: flex; flex-direction: column; gap: 16px;
+  animation: slide-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-height: 90vh; overflow-y: auto;
 }
-.modal-title { font-size: 18px; font-weight: 800; color: var(--text); }
+.modal-handle {
+  width: 40px; height: 4px; border-radius: 2px;
+  background: var(--border); margin: 0 auto -4px;
+}
+.modal-title {
+  font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: -0.01em;
+}
+@keyframes slide-up {
+  from { transform: translateY(60px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════
+   ANIMAÇÕES DE TRANSIÇÃO
+═══════════════════════════════════════════════ */
+.screen-enter { animation: screen-in 0.3s ease; }
+@keyframes screen-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 </style>
 </head>
 <body>
 
+<!-- ═══ TOAST CONTAINER ═══ -->
 <div id="toast-container"></div>
 
-<div id="screen-app">
-  <div class="topbar">
-    <div class="topbar-title">Leitor de Gabaritos</div>
-    <div id="topbar-escola" style="font-size: 12px; color: var(--cyan)">Escola ID...</div>
+<!-- ═══════════════════════════════════════════
+     SPLASH
+═══════════════════════════════════════════ -->
+<div id="screen-splash">
+  <div class="splash-logo-wrap">
+    <div class="splash-reticle">
+      <div class="splash-scan"></div>
+      <!-- Ícone: scanner/gabarito -->
+      <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="6" y="8" width="32" height="28" rx="3" stroke="white" stroke-width="2"/>
+        <rect x="10" y="14" width="5" height="5" rx="2.5" fill="white"/>
+        <rect x="19" y="14" width="5" height="5" rx="2.5" fill="rgba(255,255,255,0.3)"/>
+        <rect x="28" y="14" width="5" height="5" rx="2.5" fill="rgba(255,255,255,0.3)"/>
+        <rect x="10" y="23" width="5" height="5" rx="2.5" fill="rgba(255,255,255,0.3)"/>
+        <rect x="19" y="23" width="5" height="5" rx="2.5" fill="white"/>
+        <rect x="28" y="23" width="5" height="5" rx="2.5" fill="rgba(255,255,255,0.3)"/>
+        <line x1="3" y1="11" x2="7" y2="11" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <line x1="3" y1="33" x2="7" y2="33" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <line x1="37" y1="11" x2="41" y2="11" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <line x1="37" y1="33" x2="41" y2="33" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="splash-title">Leitor de Gabaritos</div>
+      <div class="splash-sub" style="text-align:center">Correção automática de provas</div>
+    </div>
+  </div>
+  <div class="splash-spinner"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     LOGIN
+═══════════════════════════════════════════ -->
+<div id="screen-login" class="hidden">
+  <div class="login-hero">
+    <!-- Grade de bolhas (elemento assinatura) -->
+    <div class="bubble-grid" id="bubble-grid"></div>
+    <div class="hero-scan-line"></div>
+
+    <div class="login-hero-content">
+      <div class="login-hero-icon">
+        <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="6" y="8" width="32" height="28" rx="3" stroke="white" stroke-width="2"/>
+          <rect x="10" y="14" width="5" height="5" rx="2.5" fill="white"/>
+          <rect x="19" y="14" width="5" height="5" rx="2.5" fill="rgba(255,255,255,0.3)"/>
+          <rect x="28" y="14" width="5" height="5" rx="2.5" fill="rgba(255,255,255,0.3)"/>
+          <rect x="10" y="23" width="5" height="5" rx="2.5" fill="rgba(255,255,255,0.3)"/>
+          <rect x="19" y="23" width="5" height="5" rx="2.5" fill="white"/>
+          <rect x="28" y="23" width="5" height="5" rx="2.5" fill="rgba(255,255,255,0.3)"/>
+          <line x1="3" y1="11" x2="7" y2="11" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          <line x1="3" y1="33" x2="7" y2="33" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          <line x1="37" y1="11" x2="41" y2="11" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          <line x1="37" y1="33" x2="41" y2="33" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="login-title">Leitor de <span>Gabaritos</span></div>
+        <div class="login-sub">Corrija provas objetivas em segundos com a câmera do celular</div>
+      </div>
+    </div>
   </div>
 
-  <div class="app-content">
-    
-    <div id="view-inicio" class="view-section">
-      <div style="padding: 20px;">
-        <h2 style="font-size: 22px; margin-bottom: 20px;">Visão Geral</h2>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-          <div class="card"><div style="font-size:12px; color:var(--text-muted)">TURMAS</div><div id="stat-turmas" style="font-size:24px; font-weight:bold; color:var(--cyan)">0</div></div>
-          <div class="card"><div style="font-size:12px; color:var(--text-muted)">ALUNOS</div><div id="stat-alunos" style="font-size:24px; font-weight:bold; color:var(--cyan)">0</div></div>
-          <div class="card"><div style="font-size:12px; color:var(--text-muted)">PROVAS</div><div id="stat-provas" style="font-size:24px; font-weight:bold; color:var(--cyan)">0</div></div>
-          <div class="card"><div style="font-size:12px; color:var(--text-muted)">CORREÇÕES</div><div id="stat-correcoes" style="font-size:24px; font-weight:bold; color:var(--yellow)">0</div></div>
+  <div class="login-card">
+    <div>
+      <div class="login-card-title">Entrar</div>
+      <div class="login-card-sub">Use sua conta Google para acessar o app</div>
+    </div>
+
+    <button class="btn btn-google" id="btn-google-login">
+      <svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      </svg>
+      Continuar com Google
+    </button>
+
+    <div class="divider">ou</div>
+
+    <button class="btn btn-primary" id="btn-email-login" style="opacity:0.6;cursor:not-allowed" disabled>
+      ✉️ &nbsp;Entrar com e-mail
+      <span style="font-size:10px;opacity:0.6;margin-left:4px">(em breve)</span>
+    </button>
+
+    <div class="login-terms">
+      Ao entrar, você concorda com os Termos de Uso e a Política de Privacidade do Leitor de Gabaritos.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     ONBOARDING
+═══════════════════════════════════════════ -->
+<div id="screen-onboarding" class="hidden">
+
+  <!-- PASSO 1: Escolher criar ou entrar -->
+  <div id="ob-step-1">
+    <div class="onboarding-header">
+      <div class="onboarding-step-label">Bem-vindo(a) 👋</div>
+      <div class="onboarding-title">Vincule sua escola</div>
+      <div class="onboarding-sub">
+        Todas as provas, turmas e alunos são organizados pela escola.
+        Escolha uma opção para continuar.
+      </div>
+    </div>
+
+    <div class="onboarding-body">
+      <div class="escola-option" id="opt-create" onclick="selectOpt('create')">
+        <div class="escola-option-icon create">🏫</div>
+        <div class="escola-option-info">
+          <div class="escola-option-title">Criar nova escola</div>
+          <div class="escola-option-sub">Sou o primeiro professor a usar o app nesta escola. Vou gerar o código de acesso.</div>
+        </div>
+      </div>
+      <div class="escola-option" id="opt-join" onclick="selectOpt('join')">
+        <div class="escola-option-icon join">🔑</div>
+        <div class="escola-option-info">
+          <div class="escola-option-title">Entrar com código</div>
+          <div class="escola-option-sub">Já tenho o código da escola — um colega me passou ou vi na sala dos professores.</div>
         </div>
       </div>
     </div>
 
-    <div id="view-turmas" class="view-section hidden">
-      <div class="list-container" id="list-turmas">
-        <div style="text-align:center; padding: 40px; color:var(--text-muted)">Carregando turmas...</div>
+    <div class="onboarding-footer">
+      <div class="step-dots">
+        <div class="step-dot active"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
       </div>
-      <button class="fab" onclick="openModal('modal-turma')">+</button>
+      <button class="btn btn-cyan" id="btn-ob-next-1" onclick="obNext1()" disabled>
+        Continuar
+      </button>
+      <button class="btn btn-ghost" onclick="signOut()">Sair da conta</button>
     </div>
+  </div>
 
-    <div id="view-alunos" class="view-section hidden">
-      <div style="padding: 16px;">
-        <select id="filtro-turma-alunos" class="select" onchange="renderAlunos()">
-          <option value="">Todas as Turmas</option>
+  <!-- PASSO 2a: Criar escola -->
+  <div id="ob-step-2a" class="hidden">
+    <div class="onboarding-header">
+      <div class="onboarding-step-label">Nova escola</div>
+      <div class="onboarding-title">Dados da escola</div>
+      <div class="onboarding-sub">Preencha as informações básicas. Você poderá editar depois.</div>
+    </div>
+    <div class="onboarding-body">
+      <div class="input-group">
+        <label class="input-label">Nome da escola</label>
+        <input class="input" id="inp-escola-nome" type="text"
+               placeholder="Ex: E.E. Rui Barbosa" maxlength="80"
+               oninput="checkCreateForm()">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Município</label>
+        <input class="input" id="inp-escola-cidade" type="text"
+               placeholder="Ex: Caruaru" maxlength="60"
+               oninput="checkCreateForm()">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Rede de ensino</label>
+        <select class="input" id="inp-escola-rede" onchange="checkCreateForm()" style="cursor:pointer">
+          <option value="">Selecione...</option>
+          <option value="estadual">Estadual (SEE-PE)</option>
+          <option value="municipal">Municipal</option>
+          <option value="federal">Federal</option>
+          <option value="privada">Privada</option>
         </select>
       </div>
-      <div class="list-container" id="list-alunos">
-        <div style="text-align:center; padding: 40px; color:var(--text-muted)">Carregando alunos...</div>
+    </div>
+    <div class="onboarding-footer">
+      <div class="step-dots">
+        <div class="step-dot"></div>
+        <div class="step-dot active"></div>
+        <div class="step-dot"></div>
       </div>
-      <button class="fab" onclick="openModal('modal-aluno')">+</button>
+      <button class="btn btn-cyan" id="btn-criar-escola" onclick="criarEscola()" disabled>
+        Criar escola e gerar código
+      </button>
+      <button class="btn btn-ghost" onclick="backToStep1()">← Voltar</button>
     </div>
-
-    <div id="view-provas" class="view-section hidden">
-      <div class="list-container" id="list-provas">
-        <div style="text-align:center; padding: 40px; color:var(--text-muted)">Carregando provas...</div>
-      </div>
-      <button class="fab" onclick="openModal('modal-prova')">+</button>
-    </div>
-
   </div>
 
-  <div class="bottom-nav">
-    <div class="nav-item active" onclick="navTo('inicio')"><span>Início</span></div>
-    <div class="nav-item" onclick="navTo('turmas')"><span>Turmas</span></div>
-    <div class="nav-item" onclick="navTo('alunos')"><span>Alunos</span></div>
-    <div class="nav-item" onclick="navTo('provas')"><span>Provas</span></div>
-  </div>
-</div>
-
-<div id="modal-turma" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('modal-turma')">
-  <div class="modal">
-    <div class="modal-title">Nova Turma</div>
-    <div class="input-group">
-      <label class="input-label">Nome da Turma</label>
-      <input type="text" id="t-nome" class="input" placeholder="Ex: 9º Ano A">
+  <!-- PASSO 2b: Entrar com código -->
+  <div id="ob-step-2b" class="hidden">
+    <div class="onboarding-header">
+      <div class="onboarding-step-label">Entrar com código</div>
+      <div class="onboarding-title">Qual é o código da sua escola?</div>
+      <div class="onboarding-sub">O código tem 6 caracteres e foi gerado pelo primeiro professor que cadastrou a escola no app.</div>
     </div>
-    <div class="input-group">
-      <label class="input-label">Turno</label>
-      <select id="t-turno" class="select">
-        <option value="Manhã">Manhã</option>
-        <option value="Tarde">Tarde</option>
-        <option value="Noite">Noite</option>
-        <option value="Integral">Integral</option>
-      </select>
-    </div>
-    <div class="input-group">
-      <label class="input-label">Ano Letivo</label>
-      <input type="number" id="t-ano" class="input" value="2026">
-    </div>
-    <button class="btn btn-cyan" onclick="salvarTurma()">Salvar Turma</button>
-  </div>
-</div>
-
-<div id="modal-aluno" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('modal-aluno')">
-  <div class="modal">
-    <div class="modal-title">Importar Alunos</div>
-    <div class="input-group">
-      <label class="input-label">Turma de Destino</label>
-      <select id="a-turma" class="select"></select>
-    </div>
-    <div class="input-group">
-      <label class="input-label">Lista de Nomes (um por linha)</label>
-      <textarea id="a-nomes" class="textarea" placeholder="João Silva&#10;Maria Santos&#10;Carlos Eduardo..."></textarea>
-    </div>
-    <button class="btn btn-cyan" onclick="salvarAlunos()">Importar Lote</button>
-  </div>
-</div>
-
-<div id="modal-prova" class="modal-overlay hidden" onclick="if(event.target===this)closeModal('modal-prova')">
-  <div class="modal">
-    <div class="modal-title">Criar Prova</div>
-    
-    <div id="p-step-1" class="wizard-step active">
+    <div class="onboarding-body">
       <div class="input-group">
-        <label class="input-label">Nome da Prova</label>
-        <input type="text" id="p-nome" class="input" placeholder="Ex: Mensal de Matemática">
+        <label class="input-label">Código da escola</label>
+        <input class="input input-code" id="inp-codigo" type="text"
+               placeholder="AB1C2D" maxlength="6"
+               oninput="this.value=this.value.toUpperCase(); checkJoinForm()">
       </div>
-      <div style="display:flex; gap:12px">
-        <div class="input-group" style="flex:1">
-          <label class="input-label">Qtd. Questões</label>
-          <input type="number" id="p-qtd" class="input" value="10" min="1" max="90">
+      <div id="join-error" class="hidden" style="padding:12px;background:rgba(230,57,70,0.1);border:1px solid rgba(230,57,70,0.3);border-radius:10px;font-size:13px;color:#FF8A8A;text-align:center;">
+        Código não encontrado. Verifique com seu colega.
+      </div>
+    </div>
+    <div class="onboarding-footer">
+      <div class="step-dots">
+        <div class="step-dot"></div>
+        <div class="step-dot active"></div>
+        <div class="step-dot"></div>
+      </div>
+      <button class="btn btn-cyan" id="btn-join-escola" onclick="joinEscola()" disabled>
+        Entrar na escola
+      </button>
+      <button class="btn btn-ghost" onclick="backToStep1()">← Voltar</button>
+    </div>
+  </div>
+
+  <!-- PASSO 3: Código gerado / Sucesso -->
+  <div id="ob-step-3" class="hidden">
+    <div class="onboarding-header">
+      <div class="onboarding-step-label">Tudo pronto! 🎉</div>
+      <div class="onboarding-title" id="ob-step3-title">Escola cadastrada</div>
+      <div class="onboarding-sub" id="ob-step3-sub">Compartilhe o código abaixo com seus colegas professores para que eles entrem na mesma escola.</div>
+    </div>
+    <div class="onboarding-body">
+      <div class="code-display" id="ob-code-display">
+        <div class="code-display-label">Código da escola</div>
+        <div class="code-display-value" id="ob-code-value">——</div>
+        <div class="code-display-hint">Guarde este código — seus colegas vão precisar</div>
+        <button class="code-copy-btn" onclick="copyCode()">Copiar</button>
+      </div>
+
+      <div class="card" style="background: rgba(0,180,216,0.07); border-color: rgba(0,180,216,0.2);">
+        <div style="font-size:13px; color:var(--text-muted); line-height:1.6;">
+          📌 <strong style="color:var(--text);">Dica:</strong> cole o código na sala dos professores ou no grupo do WhatsApp da escola para que qualquer colega possa entrar.
         </div>
-        <div class="input-group" style="flex:1">
-          <label class="input-label">Alternativas</label>
-          <select id="p-alt" class="select">
-            <option value="3">3 (A-C)</option>
-            <option value="4">4 (A-D)</option>
-            <option value="5" selected>5 (A-E)</option>
-          </select>
-        </div>
-      </div>
-      <button class="btn btn-cyan" onclick="pAvancar(2)">Configurar Gabarito →</button>
-    </div>
-
-    <div id="p-step-2" class="wizard-step">
-      <div class="input-label" style="margin-bottom:8px;">Gabarito Oficial</div>
-      <div id="p-gabarito-grid" style="max-height: 200px; overflow-y: auto; padding-right:8px;"></div>
-      <div style="display:flex; gap:8px; margin-top:16px;">
-        <button class="btn btn-ghost" style="flex:1" onclick="pAvancar(1)">Voltar</button>
-        <button class="btn btn-cyan" style="flex:1" onclick="pAvancar(3)">Pesos e Anulações →</button>
       </div>
     </div>
-
-    <div id="p-step-3" class="wizard-step">
-      <div class="input-label" style="margin-bottom:8px;">Pesos (Opcional)</div>
-      <div id="p-pesos-grid" style="max-height: 200px; overflow-y: auto; padding-right:8px; font-size:14px; color:var(--text-muted)">
-        (Simplificado: nesta versão todas valem 1.0 por padrão)
+    <div class="onboarding-footer">
+      <div class="step-dots">
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot active"></div>
       </div>
-      <div style="display:flex; gap:8px; margin-top:16px;">
-        <button class="btn btn-ghost" style="flex:1" onclick="pAvancar(2)">Voltar</button>
-        <button class="btn btn-primary" style="flex:1" onclick="salvarProva()">Concluir e Salvar</button>
+      <button class="btn btn-cyan" onclick="finishOnboarding()">
+        Começar a usar o app →
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     APP PRINCIPAL
+═══════════════════════════════════════════ -->
+<div id="screen-app" class="hidden">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-logo-icon">
+        <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="6" y="8" width="32" height="28" rx="3" stroke="white" stroke-width="1.8"/>
+          <rect x="10" y="14" width="5" height="5" rx="2.5" fill="white"/>
+          <rect x="19" y="14" width="5" height="5" rx="2.5" fill="rgba(255,255,255,0.3)"/>
+          <rect x="10" y="23" width="5" height="5" rx="2.5" fill="rgba(255,255,255,0.3)"/>
+          <rect x="19" y="23" width="5" height="5" rx="2.5" fill="white"/>
+        </svg>
+      </div>
+      <div>
+        <div class="topbar-title">Leitor de Gabaritos</div>
+        <div class="topbar-escola" id="topbar-escola-name">Carregando...</div>
       </div>
     </div>
+    <div class="topbar-right">
+      <div class="topbar-avatar" id="topbar-avatar" onclick="navTo('mais')">
+        <span id="topbar-avatar-initials">?</span>
+      </div>
+    </div>
+  </div>
 
+  <!-- Conteúdo -->
+  <div class="app-content" id="app-content"></div>
+
+  <!-- Bottom nav -->
+  <div class="bottom-nav">
+    <div class="nav-item active" id="nav-inicio" onclick="navTo('inicio')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+      <span>Início</span>
+    </div>
+    <div class="nav-item" id="nav-provas" onclick="navTo('provas')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+      </svg>
+      <span>Provas</span>
+    </div>
+    <div class="nav-item" id="nav-turmas" onclick="navTo('turmas')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      <span>Turmas</span>
+    </div>
+    <div class="nav-item" id="nav-alunos" onclick="navTo('alunos')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
+      </svg>
+      <span>Alunos</span>
+    </div>
+    <div class="nav-item" id="nav-mais" onclick="navTo('mais')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+      </svg>
+      <span>Mais</span>
+    </div>
   </div>
 </div>
 
 <script>
-// Mock Firebase Init para o protótipo local rodar (substitua pelas suas credenciais)
-const firebaseConfig = { projectId: "leitor-gabaritos-demo" };
-if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-
-// Estado Local
-const appState = {
-  escolaId: "escola_demo_123", // No fluxo real, vem da Auth/Onboarding
-  turmas: [],
-  alunos: [],
-  provas: [],
-  provaWizard: { gabarito: {} }
+/* ═══════════════════════════════════════════
+   FIREBASE CONFIG
+   ⚠️ Substitua pelos dados do seu projeto
+═══════════════════════════════════════════ */
+const firebaseConfig = {
+  apiKey:            "AIzaSyCOz9GnqOT5_1l6DRHpSbe-M9cfAA8L2-8",
+  authDomain:        "gabarito-nota-mestra.firebaseapp.com",
+  projectId:         "gabarito-nota-mestra",
+  storageBucket:     "gabarito-nota-mestra.firebasestorage.app",
+  messagingSenderId: "1052754016695",
+  appId:             "1:1052754016695:web:8f9cea6f3acf1c8f979032"
 };
 
-// Ao carregar
-window.onload = () => {
-  document.getElementById('topbar-escola').innerText = `ID: ${appState.escolaId}`;
-  iniciarListenersFirestore();
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+/* ═══════════════════════════════════════════
+   ESTADO GLOBAL
+═══════════════════════════════════════════ */
+const app = {
+  user:       null,   // firebase user
+  professor:  null,   // doc de /professores/{uid}
+  escola:     null,   // doc de /escolas/{escolaId}
+  escolaId:   null,
+  currentNav: 'inicio',
+  obMode:     null    // 'create' | 'join'
 };
 
-function toast(msg, type='success') {
+/* ═══════════════════════════════════════════
+   UTILIDADES
+═══════════════════════════════════════════ */
+function showScreen(id) {
+  ['screen-splash','screen-login','screen-onboarding','screen-app'].forEach(s => {
+    const el = document.getElementById(s);
+    if (el) el.classList.add('hidden');
+  });
+  const target = document.getElementById(id);
+  if (target) {
+    target.classList.remove('hidden');
+    target.classList.add('screen-enter');
+    setTimeout(() => target.classList.remove('screen-enter'), 400);
+  }
+}
+
+function toast(msg, type = '') {
   const c = document.getElementById('toast-container');
   const t = document.createElement('div');
-  t.className = `toast ${type}`;
-  t.innerText = msg;
+  t.className = 'toast' + (type ? ' ' + type : '');
+  t.textContent = msg;
   c.appendChild(t);
-  setTimeout(() => t.remove(), 3000);
+  setTimeout(() => t.remove(), 3200);
 }
 
-// Navegação UI
-function navTo(viewId) {
-  document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  document.getElementById(`view-${viewId}`).classList.remove('hidden');
-  event.currentTarget.classList.add('active');
+function setLoading(btnId, loading) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  if (loading) {
+    btn._origText = btn.innerHTML;
+    btn.innerHTML = '<div class="spinner"></div>';
+    btn.disabled = true;
+  } else {
+    btn.innerHTML = btn._origText || '';
+    btn.disabled = false;
+  }
 }
 
-function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
-function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
-
-// ═══════════════════════════════════════════
-// LISTENERS (DASHBOARD TEMPO REAL)
-// ═══════════════════════════════════════════
-function iniciarListenersFirestore() {
-  const ref = db.collection('escolas').doc(appState.escolaId);
-  
-  // Turmas
-  ref.collection('turmas').onSnapshot(snap => {
-    appState.turmas = [];
-    snap.forEach(doc => appState.turmas.push({ id: doc.id, ...doc.data() }));
-    document.getElementById('stat-turmas').innerText = appState.turmas.length;
-    renderTurmas();
-    atualizarSelectsTurma();
-  });
-
-  // Alunos
-  ref.collection('alunos').onSnapshot(snap => {
-    appState.alunos = [];
-    snap.forEach(doc => appState.alunos.push({ id: doc.id, ...doc.data() }));
-    document.getElementById('stat-alunos').innerText = appState.alunos.length;
-    renderAlunos();
-  });
-
-  // Provas
-  ref.collection('provas').onSnapshot(snap => {
-    appState.provas = [];
-    snap.forEach(doc => appState.provas.push({ id: doc.id, ...doc.data() }));
-    document.getElementById('stat-provas').innerText = appState.provas.length;
-    renderProvas();
-  });
+function gerarCodigo() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
 }
 
-// ═══════════════════════════════════════════
-// CRUD: TURMAS
-// ═══════════════════════════════════════════
-async function salvarTurma() {
-  const nome = document.getElementById('t-nome').value.trim();
-  const turno = document.getElementById('t-turno').value;
-  const ano = document.getElementById('t-ano').value;
-  if (!nome) return toast('Preencha o nome', 'error');
-
-  await db.collection('escolas').doc(appState.escolaId).collection('turmas').add({
-    nome, turno, anoLetivo: ano, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
-  });
-  
-  closeModal('modal-turma');
-  document.getElementById('t-nome').value = '';
-  toast('Turma criada!');
+function initials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(' ');
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function renderTurmas() {
-  const list = document.getElementById('list-turmas');
-  if (appState.turmas.length === 0) {
-    list.innerHTML = `<div style="text-align:center; padding: 40px; color:var(--text-muted)">Nenhuma turma criada</div>`;
+/* ═══════════════════════════════════════════
+   AUTH
+═══════════════════════════════════════════ */
+// Login Google
+document.getElementById('btn-google-login').onclick = async () => {
+  /* 
+   * ANDROID WEBVIEW: este bloco precisará de bridge nativa (igual ao Nota Mestra).
+   * No Android Studio, intercepte window.LeituraAndroid.googleSignIn()
+   * e retorne o idToken via window.onGoogleIdToken(token).
+   * Por ora, usa signInWithPopup para testes no navegador.
+   */
+  if (window.LeituraAndroid?.googleSignIn) {
+    window.LeituraAndroid.googleSignIn();
     return;
   }
-  list.innerHTML = appState.turmas.map(t => `
-    <div class="list-item">
-      <div>
-        <div class="list-item-title">${t.nome}</div>
-        <div class="list-item-sub">${t.turno} • ${t.anoLetivo}</div>
-      </div>
-    </div>
-  `).join('');
+  const btn = document.getElementById('btn-google-login');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="border-top-color:#4285F4"></div> Entrando...';
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    await auth.signInWithPopup(provider);
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Continuar com Google`;
+    toast('Erro ao entrar: ' + (e.message || 'tente novamente'), 'error');
+  }
+};
+
+// Bridge Android → recebe idToken e faz login
+window.onGoogleIdToken = async (idToken) => {
+  try {
+    const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
+    await auth.signInWithCredential(credential);
+  } catch (e) {
+    toast('Erro ao autenticar: ' + e.message, 'error');
+  }
+};
+
+async function signOut() {
+  await auth.signOut();
 }
 
-function atualizarSelectsTurma() {
-  const options = `<option value="">Selecione uma turma...</option>` + 
-    appState.turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('');
-  document.getElementById('a-turma').innerHTML = options;
-  
-  const optionsFiltro = `<option value="">Todas as Turmas</option>` + 
-    appState.turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('');
-  document.getElementById('filtro-turma-alunos').innerHTML = optionsFiltro;
-}
-
-// ═══════════════════════════════════════════
-// CRUD: ALUNOS (LOTE)
-// ═══════════════════════════════════════════
-async function salvarAlunos() {
-  const turmaId = document.getElementById('a-turma').value;
-  const nomesBrutos = document.getElementById('a-nomes').value;
-  
-  if (!turmaId) return toast('Selecione uma turma', 'error');
-  
-  const nomes = nomesBrutos.split('\n').map(n => n.trim()).filter(n => n.length > 0);
-  if (nomes.length === 0) return toast('Insira ao menos um nome', 'error');
-
-  const batch = db.batch();
-  const alunosRef = db.collection('escolas').doc(appState.escolaId).collection('alunos');
-
-  nomes.forEach(nome => {
-    const docRef = alunosRef.doc();
-    batch.set(docRef, {
-      nome, turmaId, ativo: true, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
-    });
-  });
-
-  await batch.commit();
-  closeModal('modal-aluno');
-  document.getElementById('a-nomes').value = '';
-  toast(`${nomes.length} alunos importados!`);
-}
-
-function renderAlunos() {
-  const list = document.getElementById('list-alunos');
-  const filtroId = document.getElementById('filtro-turma-alunos').value;
-  
-  const alunosFiltrados = filtroId 
-    ? appState.alunos.filter(a => a.turmaId === filtroId)
-    : appState.alunos;
-
-  if (alunosFiltrados.length === 0) {
-    list.innerHTML = `<div style="text-align:center; padding: 40px; color:var(--text-muted)">Nenhum aluno encontrado</div>`;
+/* ═══════════════════════════════════════════
+   AUTH STATE LISTENER
+═══════════════════════════════════════════ */
+auth.onAuthStateChanged(async (user) => {
+  if (!user) {
+    app.user = null; app.professor = null; app.escola = null;
+    showScreen('screen-login');
+    buildBubbleGrid();
     return;
   }
-  
-  // Sort alfabético
-  alunosFiltrados.sort((a, b) => a.nome.localeCompare(b.nome));
-
-  list.innerHTML = alunosFiltrados.map(a => {
-    const turma = appState.turmas.find(t => t.id === a.turmaId);
-    return `
-      <div class="list-item">
-        <div>
-          <div class="list-item-title">${a.nome}</div>
-          <div class="list-item-sub">Turma: ${turma ? turma.nome : 'Sem turma'}</div>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-// ═══════════════════════════════════════════
-// CRUD: PROVAS (WIZARD)
-// ═══════════════════════════════════════════
-function pAvancar(step) {
-  document.querySelectorAll('.wizard-step').forEach(el => el.classList.remove('active'));
-  document.getElementById(`p-step-${step}`).classList.add('active');
-
-  if (step === 2) renderGabaritoGrid();
-}
-
-function renderGabaritoGrid() {
-  const qtd = parseInt(document.getElementById('p-qtd').value) || 10;
-  const alts = parseInt(document.getElementById('p-alt').value) || 5;
-  const letras = ['A','B','C','D','E'];
-  const grid = document.getElementById('p-gabarito-grid');
-  
-  let html = '';
-  for(let i = 1; i <= qtd; i++) {
-    html += `<div class="bubble-row"><div class="bubble-num">${i}.</div>`;
-    for(let a = 0; a < alts; a++) {
-      const letra = letras[a];
-      const selected = appState.provaWizard.gabarito[i] === letra ? 'selected' : '';
-      html += `<button class="bubble-btn ${selected}" onclick="setGabarito(${i}, '${letra}', this)">${letra}</button>`;
+  app.user = user;
+  // Verificar se professor já tem escola vinculada
+  try {
+    const profDoc = await db.collection('professores').doc(user.uid).get();
+    if (profDoc.exists) {
+      const profData = profDoc.data();
+      app.professor = profData;
+      if (profData.escolaId) {
+        app.escolaId = profData.escolaId;
+        const escolaDoc = await db.collection('escolas').doc(profData.escolaId).get();
+        if (escolaDoc.exists) {
+          app.escola = escolaDoc.data();
+          showApp();
+          return;
+        }
+      }
     }
-    html += `</div>`;
+    // Sem escola vinculada → onboarding
+    showScreen('screen-onboarding');
+    showObStep(1);
+  } catch (e) {
+    toast('Erro ao carregar dados: ' + e.message, 'error');
+    showScreen('screen-onboarding');
+    showObStep(1);
   }
-  grid.innerHTML = html;
-}
+});
 
-function setGabarito(q, letra, btn) {
-  appState.provaWizard.gabarito[q] = letra;
-  const row = btn.parentElement;
-  row.querySelectorAll('.bubble-btn').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-}
-
-async function salvarProva() {
-  const nome = document.getElementById('p-nome').value.trim();
-  const numQuestoes = parseInt(document.getElementById('p-qtd').value);
-  const numAlternativas = parseInt(document.getElementById('p-alt').value);
-  const gabarito = appState.provaWizard.gabarito;
-
-  if (!nome) { pAvancar(1); return toast('Dê um nome à prova', 'error'); }
-  if (Object.keys(gabarito).length < numQuestoes) {
-    pAvancar(2); return toast('Preencha todas as respostas', 'error');
-  }
-
-  // Define pesos padrão de 1.0 para todas as questões
-  let pesos = {};
-  for(let i=1; i<=numQuestoes; i++) pesos[i] = 1.0;
-
-  await db.collection('escolas').doc(appState.escolaId).collection('provas').add({
-    nome, numQuestoes, numAlternativas, gabarito, pesos, anuladas: {},
-    criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+/* ═══════════════════════════════════════════
+   ONBOARDING
+═══════════════════════════════════════════ */
+function showObStep(n, mode) {
+  ['ob-step-1','ob-step-2a','ob-step-2b','ob-step-3'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
   });
-
-  closeModal('modal-prova');
-  appState.provaWizard.gabarito = {};
-  pAvancar(1);
-  document.getElementById('p-nome').value = '';
-  toast('Prova criada com sucesso!');
+  if (n === 1) document.getElementById('ob-step-1').classList.remove('hidden');
+  if (n === 2) document.getElementById(mode === 'create' ? 'ob-step-2a' : 'ob-step-2b').classList.remove('hidden');
+  if (n === 3) document.getElementById('ob-step-3').classList.remove('hidden');
 }
 
-function renderProvas() {
-  const list = document.getElementById('list-provas');
-  if (appState.provas.length === 0) {
-    list.innerHTML = `<div style="text-align:center; padding: 40px; color:var(--text-muted)">Nenhuma prova criada</div>`;
-    return;
-  }
-  
-  // Ordem de mais recente primeiro (simulação básica)
-  const sorted = [...appState.provas].reverse();
+function selectOpt(mode) {
+  app.obMode = mode;
+  ['opt-create','opt-join'].forEach(id => document.getElementById(id).classList.remove('selected'));
+  document.getElementById('opt-' + mode).classList.add('selected');
+  document.getElementById('btn-ob-next-1').disabled = false;
+}
 
-  list.innerHTML = sorted.map(p => `
-    <div class="list-item">
-      <div>
-        <div class="list-item-title">${p.nome}</div>
-        <div class="list-item-sub">${p.numQuestoes} Questões • Alternativas A-${p.numAlternativas===3?'C':(p.numAlternativas===4?'D':'E')}</div>
-      </div>
-      <button class="btn btn-ghost" style="padding: 6px 12px; font-size:12px; width:auto">Detalhes</button>
+function obNext1() {
+  if (!app.obMode) return;
+  showObStep(2, app.obMode);
+}
+
+function backToStep1() {
+  app.obMode = null;
+  showObStep(1);
+}
+
+function checkCreateForm() {
+  const nome   = document.getElementById('inp-escola-nome').value.trim();
+  const cidade = document.getElementById('inp-escola-cidade').value.trim();
+  const rede   = document.getElementById('inp-escola-rede').value;
+  document.getElementById('btn-criar-escola').disabled = !(nome && cidade && rede);
+}
+
+function checkJoinForm() {
+  const code = document.getElementById('inp-codigo').value.trim();
+  document.getElementById('btn-join-escola').disabled = code.length !== 6;
+  document.getElementById('join-error').classList.add('hidden');
+}
+
+async function criarEscola() {
+  const nome   = document.getElementById('inp-escola-nome').value.trim();
+  const cidade = document.getElementById('inp-escola-cidade').value.trim();
+  const rede   = document.getElementById('inp-escola-rede').value;
+  if (!nome || !cidade || !rede) return;
+
+  setLoading('btn-criar-escola', true);
+  try {
+    // Gerar código único
+    let codigo, exists = true;
+    while (exists) {
+      codigo = gerarCodigo();
+      const snap = await db.collection('escolas').where('codigo','==',codigo).limit(1).get();
+      exists = !snap.empty;
+    }
+
+    const escolaRef = db.collection('escolas').doc();
+    const escolaId  = escolaRef.id;
+    const escolaData = {
+      nome, cidade, rede, codigo,
+      criadoPor: app.user.uid,
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    await escolaRef.set(escolaData);
+
+    // Vincular professor como admin
+    await vincularProfessor(escolaId, nome, 'admin');
+
+    // Exibir passo 3
+    app.escola = escolaData;
+    app.escolaId = escolaId;
+    document.getElementById('ob-code-value').textContent = codigo;
+    document.getElementById('ob-step3-title').textContent = nome;
+    document.getElementById('ob-step3-sub').textContent =
+      'Escola cadastrada com sucesso! Compartilhe o código abaixo com seus colegas professores.';
+    showObStep(3);
+  } catch (e) {
+    toast('Erro ao criar escola: ' + e.message, 'error');
+  } finally {
+    setLoading('btn-criar-escola', false);
+  }
+}
+
+async function joinEscola() {
+  const code = document.getElementById('inp-codigo').value.trim().toUpperCase();
+  if (code.length !== 6) return;
+
+  setLoading('btn-join-escola', true);
+  try {
+    const snap = await db.collection('escolas').where('codigo','==',code).limit(1).get();
+    if (snap.empty) {
+      document.getElementById('join-error').classList.remove('hidden');
+      setLoading('btn-join-escola', false);
+      return;
+    }
+    const escolaDoc  = snap.docs[0];
+    const escolaId   = escolaDoc.id;
+    const escolaData = escolaDoc.data();
+
+    await vincularProfessor(escolaId, escolaData.nome, 'professor');
+
+    app.escola   = escolaData;
+    app.escolaId = escolaId;
+    document.getElementById('ob-code-value').textContent = code;
+    document.getElementById('ob-step3-title').textContent = escolaData.nome;
+    document.getElementById('ob-step3-sub').textContent =
+      'Você foi vinculado(a) à escola com sucesso! Agora você acessa todas as provas e turmas desta escola.';
+    document.getElementById('ob-code-display').style.display = 'none'; // não mostrar código para quem entrou
+    showObStep(3);
+  } catch (e) {
+    toast('Erro: ' + e.message, 'error');
+  } finally {
+    setLoading('btn-join-escola', false);
+  }
+}
+
+async function vincularProfessor(escolaId, escolaNome, role) {
+  const u = app.user;
+  await db.collection('professores').doc(u.uid).set({
+    nome:       u.displayName || 'Professor',
+    email:      u.email,
+    foto:       u.photoURL || '',
+    escolaId,
+    escolaNome,
+    role,
+    vinculadoEm: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+  app.professor = { nome: u.displayName, email: u.email, foto: u.photoURL, escolaId, escolaNome, role };
+}
+
+function finishOnboarding() {
+  showApp();
+}
+
+function copyCode() {
+  const code = document.getElementById('ob-code-value').textContent;
+  if (navigator.clipboard) navigator.clipboard.writeText(code);
+  toast('Código copiado!', 'success');
+}
+
+/* ═══════════════════════════════════════════
+   APP PRINCIPAL
+═══════════════════════════════════════════ */
+function showApp() {
+  showScreen('screen-app');
+
+  // Topbar
+  const u = app.user;
+  document.getElementById('topbar-escola-name').textContent = app.escola?.nome || '—';
+  const avatarEl = document.getElementById('topbar-avatar');
+  const initialsEl = document.getElementById('topbar-avatar-initials');
+  if (u?.photoURL) {
+    avatarEl.innerHTML = `<img src="${u.photoURL}" alt="foto">`;
+  } else {
+    initialsEl.textContent = initials(u?.displayName || '?');
+  }
+
+  navTo('inicio');
+}
+
+/* ── Navegação ── */
+function navTo(view) {
+  app.currentNav = view;
+  ['inicio','provas','turmas','alunos','mais'].forEach(v => {
+    document.getElementById('nav-' + v)?.classList.remove('active');
+  });
+  document.getElementById('nav-' + view)?.classList.add('active');
+
+  const content = document.getElementById('app-content');
+  content.innerHTML = '';
+  content.scrollTop = 0;
+
+  const views = { inicio, provas, turmas, alunos, mais };
+  if (views[view]) content.innerHTML = views[view]();
+}
+
+/* ══════════════
+   VIEW: INÍCIO
+══════════════ */
+function inicio() {
+  const nome = (app.user?.displayName || 'Professor').split(' ')[0];
+  const hora  = new Date().getHours();
+  const saud  = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  const escola = app.escola;
+
+  return `
+  <div class="dash-header">
+    <div class="dash-greeting">${saud},</div>
+    <div class="dash-name">${nome} 👋</div>
+  </div>
+
+  <div class="dash-escola-card">
+    <div class="dash-escola-icon">🏫</div>
+    <div class="dash-escola-info">
+      <div class="dash-escola-name">${escola?.nome || '—'}</div>
+      <div class="dash-escola-code">${escola?.codigo || '——'}</div>
     </div>
-  `).join('');
+    <span class="badge badge-cyan">${escola?.rede || ''}</span>
+  </div>
+
+  <div class="dash-section-title">Resumo da escola</div>
+  <div class="dash-stats">
+    <div class="stat-card">
+      <div class="stat-label">Provas</div>
+      <div class="stat-value cyan" id="stat-provas">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Turmas</div>
+      <div class="stat-value blue" id="stat-turmas">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Alunos</div>
+      <div class="stat-value" id="stat-alunos">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Correções</div>
+      <div class="stat-value yellow" id="stat-correcoes">—</div>
+    </div>
+  </div>
+
+  <div class="dash-section-title">Ações rápidas</div>
+  <div class="dash-quick-actions">
+    <div class="quick-action" onclick="navTo('provas')">
+      <div class="quick-action-icon green">📋</div>
+      <div class="quick-action-text">
+        <div class="quick-action-title">Nova prova</div>
+        <div class="quick-action-sub">Criar gabarito e gerar cartão-resposta</div>
+      </div>
+      <div class="quick-action-arrow">›</div>
+    </div>
+    <div class="quick-action" onclick="navTo('provas')">
+      <div class="quick-action-icon yellow">📷</div>
+      <div class="quick-action-text">
+        <div class="quick-action-title">Corrigir prova</div>
+        <div class="quick-action-sub">Fotografar cartão e registrar resultado</div>
+      </div>
+      <div class="quick-action-arrow">›</div>
+    </div>
+    <div class="quick-action" onclick="navTo('turmas')">
+      <div class="quick-action-icon blue">👥</div>
+      <div class="quick-action-text">
+        <div class="quick-action-title">Gerenciar turmas</div>
+        <div class="quick-action-sub">Adicionar turmas e alunos da escola</div>
+      </div>
+      <div class="quick-action-arrow">›</div>
+    </div>
+  </div>`;
+}
+
+/* ══════════════
+   VIEWS PLACEHOLDER
+══════════════ */
+function provas() {
+  return `<div class="placeholder-view">
+    <div class="placeholder-icon">📋</div>
+    <div class="placeholder-title">Provas</div>
+    <div class="placeholder-sub">Crie provas com gabarito, gere cartões-resposta e corrija com a câmera.<br><br><em style="color:var(--text-dim);font-size:12px">Disponível na Etapa 2</em></div>
+  </div>`;
+}
+
+function turmas() {
+  return `<div class="placeholder-view">
+    <div class="placeholder-icon">👥</div>
+    <div class="placeholder-title">Turmas</div>
+    <div class="placeholder-sub">Organize as turmas e alunos da escola para vincular às provas.<br><br><em style="color:var(--text-dim);font-size:12px">Disponível na Etapa 2</em></div>
+  </div>`;
+}
+
+function alunos() {
+  return `<div class="placeholder-view">
+    <div class="placeholder-icon">👤</div>
+    <div class="placeholder-title">Alunos</div>
+    <div class="placeholder-sub">Veja todos os alunos da escola e seus resultados por prova.<br><br><em style="color:var(--text-dim);font-size:12px">Disponível na Etapa 2</em></div>
+  </div>`;
+}
+
+function mais() {
+  const u = app.user;
+  const p = app.professor;
+  const avatarHtml = u?.photoURL
+    ? `<img src="${u.photoURL}" alt="foto">`
+    : `<span>${initials(u?.displayName || '?')}</span>`;
+
+  return `
+  <div class="mais-profile">
+    <div class="mais-avatar">${avatarHtml}</div>
+    <div class="mais-profile-info">
+      <div class="mais-profile-name">${u?.displayName || 'Professor'}</div>
+      <div class="mais-profile-email">${u?.email || ''}</div>
+    </div>
+    <span class="badge badge-${p?.role === 'admin' ? 'yellow' : 'blue'}">
+      ${p?.role === 'admin' ? 'Admin' : 'Professor'}
+    </span>
+  </div>
+
+  <div class="mais-section">
+    <div class="mais-section-title">Escola</div>
+    <div class="mais-item" onclick="mostrarCodigo()">
+      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">🔑</div>
+      <div class="mais-item-text">
+        <div class="mais-item-title">Código da escola</div>
+        <div class="mais-item-sub">Compartilhe com colegas professores</div>
+      </div>
+      <div class="mais-item-arrow">›</div>
+    </div>
+    <div class="mais-item">
+      <div class="mais-item-icon" style="background:rgba(26,86,160,0.2);">🏫</div>
+      <div class="mais-item-text">
+        <div class="mais-item-title">${app.escola?.nome || '—'}</div>
+        <div class="mais-item-sub">${app.escola?.cidade || ''} · ${app.escola?.rede || ''}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mais-section">
+    <div class="mais-section-title">Integração</div>
+    <div class="mais-item">
+      <div class="mais-item-icon" style="background:rgba(245,166,35,0.15);">📤</div>
+      <div class="mais-item-text">
+        <div class="mais-item-title">Exportar para Nota Mestra</div>
+        <div class="mais-item-sub">CSV por turma e disciplina</div>
+      </div>
+      <div class="mais-item-arrow">›</div>
+    </div>
+  </div>
+
+  <div class="mais-section">
+    <div class="mais-section-title">Conta</div>
+    <div class="mais-item" onclick="confirmSignOut()">
+      <div class="mais-item-icon" style="background:rgba(230,57,70,0.12);">🚪</div>
+      <div class="mais-item-text">
+        <div class="mais-item-title" style="color:var(--red)">Sair da conta</div>
+        <div class="mais-item-sub">Você precisará entrar novamente</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:11px;">
+    Leitor de Gabaritos v1.0 · Etapa 1
+  </div>`;
+}
+
+/* ══════════════
+   MODAIS
+══════════════ */
+function mostrarCodigo() {
+  const codigo = app.escola?.codigo || '——';
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Código da escola</div>
+    <div class="code-display" style="margin:0">
+      <div class="code-display-label">${app.escola?.nome || ''}</div>
+      <div class="code-display-value">${codigo}</div>
+      <div class="code-display-hint">Compartilhe com seus colegas para que eles entrem na mesma escola</div>
+      <button class="code-copy-btn" onclick="navigator.clipboard?.writeText('${codigo}'); toast('Copiado!','success')">Copiar</button>
+    </div>
+    <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+  `);
+}
+
+function confirmSignOut() {
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Sair da conta?</div>
+    <div style="font-size:14px;color:var(--text-muted);line-height:1.5;">
+      Você precisará entrar com o Google novamente. Seus dados ficam salvos na escola.
+    </div>
+    <button class="btn btn-danger" onclick="signOut();closeModal()">Sim, sair</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+function showModal(html) {
+  closeModal();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay'; overlay.id = 'modal-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+  const modal = document.createElement('div');
+  modal.className = 'modal'; modal.innerHTML = html;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay')?.remove();
+}
+
+/* ═══════════════════════════════════════════
+   ESTATÍSTICAS DO DASHBOARD (Firestore)
+═══════════════════════════════════════════ */
+async function loadDashStats() {
+  if (!app.escolaId) return;
+  try {
+    const [provasSnap, turmasSnap, alunosSnap, correcSnap] = await Promise.all([
+      db.collection('escolas').doc(app.escolaId).collection('provas').get(),
+      db.collection('escolas').doc(app.escolaId).collection('turmas').get(),
+      db.collection('escolas').doc(app.escolaId).collection('alunos').get(),
+      db.collection('escolas').doc(app.escolaId).collection('resultados').get()
+    ]);
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('stat-provas',    provasSnap.size);
+    set('stat-turmas',    turmasSnap.size);
+    set('stat-alunos',    alunosSnap.size);
+    set('stat-correcoes', correcSnap.size);
+  } catch { /* Coleções ainda não existem — normal no início */ }
+}
+
+// Observa mudanças de view para carregar stats
+const _originalNavTo = navTo;
+function navTo(view) {
+  _originalNavTo(view);
+  if (view === 'inicio') setTimeout(loadDashStats, 100);
+}
+
+/* ═══════════════════════════════════════════
+   GRADE DE BOLHAS (elemento assinatura do login)
+═══════════════════════════════════════════ */
+function buildBubbleGrid() {
+  const grid = document.getElementById('bubble-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  // 60 células, ~30% preenchidas aleatoriamente
+  for (let i = 0; i < 60; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'bubble-cell' + (Math.random() < 0.28 ? ' filled' : '');
+    grid.appendChild(cell);
+  }
 }
 </script>
 </body>
