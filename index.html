@@ -863,7 +863,7 @@ async function abrirProva(id) {
         </div>
         <div class="quick-action-arrow">›</div>
       </div>
-      <div class="quick-action" onclick="toast('Disponível na Etapa 4','')">
+      <div class="quick-action" onclick="iniciarCorrecao('${p.id}')">
         <div class="quick-action-icon green">📷</div>
         <div class="quick-action-text">
           <div class="quick-action-title">Corrigir prova</div>
@@ -964,6 +964,7 @@ signOut = async function() {
 <!-- Etapa 3: geração de cartão-resposta -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="window._opencvReady=true;console.log('OpenCV.js carregado')"></script>
 
 <!-- Google Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2731,7 +2732,7 @@ function inicio() {
       <div class="quick-action-icon yellow">📷</div>
       <div class="quick-action-text">
         <div class="quick-action-title">Corrigir prova</div>
-        <div class="quick-action-sub">Fotografar cartão e registrar resultado</div>
+        <div class="quick-action-sub">Selecione uma prova para fotografar</div>
       </div>
       <div class="quick-action-arrow">›</div>
     </div>
@@ -3286,6 +3287,1073 @@ function downloadPDF() {
   pdf.save(`cartao_${slug}.pdf`);
   toast('PDF salvo!', 'success');
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   ETAPA 4 — CORREÇÃO DE GABARITOS POR CÂMERA
+   Fluxo: seleção aluno → câmera → captura → OpenCV → conferência → salvar
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Estado da sessão de correção ── */
+const corr = {
+  provaId:   null,
+  prova:     null,
+  alunoId:   null,
+  aluno:     null,
+  stream:    null,    // MediaStream ativo
+  imgData:   null,    // ImageData do frame capturado
+  imgWidth:  0,
+  imgHeight: 0,
+  layout:    null,    // layout calculado (mesmo algoritmo da Etapa 3)
+  detected:  {},      // { q: alt } — resultado do OpenCV
+  duplas:    [],      // questões com dupla marcação [ q, ... ]
+  revisao:   {},      // { q: alt | 'ANULADA' } — ajustes manuais
+};
+
+/* ══════════════════════════════════════
+   CSS da Etapa 4 (injetado dinamicamente)
+══════════════════════════════════════ */
+(function injectE4CSS() {
+  const style = document.createElement('style');
+  style.textContent = `
+/* Overlay tela cheia */
+.e4-overlay {
+  position: fixed; inset: 0; z-index: 500;
+  background: #000; display: flex; flex-direction: column;
+  animation: fade-in .2s ease;
+}
+/* Câmera */
+#e4-video {
+  width: 100%; height: 100%; object-fit: cover;
+  position: absolute; inset: 0;
+}
+/* Canvas de preview (invisível) */
+#e4-canvas { display: none; }
+/* Guia de enquadramento */
+.e4-guide {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.e4-frame {
+  width: 88%; max-width: 420px;
+  aspect-ratio: 148/105; /* proporcional ao cartão A5 paisagem */
+  position: relative;
+}
+.e4-frame.portrait { aspect-ratio: 105/148; }
+.e4-corner {
+  position: absolute; width: 28px; height: 28px;
+  border-color: #00D4FF; border-style: solid;
+}
+.e4-corner.tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+.e4-corner.tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+.e4-corner.bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+.e4-corner.br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+.e4-guide-label {
+  position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%);
+  color: rgba(255,255,255,.85); font-size: 12px; font-weight: 600;
+  white-space: nowrap; letter-spacing: .04em;
+}
+/* Barra inferior da câmera */
+.e4-cam-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 20px 24px calc(20px + env(safe-area-inset-bottom,0px));
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(transparent, rgba(0,0,0,.75));
+}
+.e4-shutter {
+  width: 68px; height: 68px; border-radius: 50%;
+  border: 4px solid #fff; background: rgba(255,255,255,.15);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all .15s; -webkit-tap-highlight-color: transparent;
+}
+.e4-shutter:active { transform: scale(.9); background: rgba(255,255,255,.35); }
+.e4-shutter-inner {
+  width: 48px; height: 48px; border-radius: 50%; background: #fff;
+}
+.e4-cam-side {
+  width: 60px; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; cursor: pointer;
+}
+.e4-cam-side-btn {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: rgba(255,255,255,.15); border: 1.5px solid rgba(255,255,255,.3);
+  display: flex; align-items: center; justify-content: center; font-size: 20px;
+}
+.e4-cam-side-lbl { font-size: 10px; color: rgba(255,255,255,.7); font-weight: 600; text-align: center; }
+
+/* Topo da câmera */
+.e4-cam-top {
+  position: absolute; top: 0; left: 0; right: 0;
+  padding: calc(14px + env(safe-area-inset-top,0)) 16px 14px;
+  display: flex; align-items: center; gap: 12px;
+  background: linear-gradient(rgba(0,0,0,.6), transparent);
+}
+.e4-cam-close {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; color: #fff; cursor: pointer; flex-shrink: 0;
+}
+.e4-cam-info { flex: 1; }
+.e4-cam-prova { font-size: 13px; font-weight: 700; color: #fff; }
+.e4-cam-aluno { font-size: 11px; color: rgba(255,255,255,.7); margin-top: 2px; }
+
+/* Processando */
+.e4-processing {
+  position: absolute; inset: 0; background: rgba(0,0,0,.82);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px;
+}
+.e4-proc-spin {
+  width: 52px; height: 52px;
+  border: 3px solid rgba(0,180,216,.25); border-top-color: #00B4D8;
+  border-radius: 50%; animation: spin .8s linear infinite;
+}
+.e4-proc-label { font-size: 15px; color: #fff; font-weight: 600; }
+.e4-proc-sub   { font-size: 12px; color: rgba(255,255,255,.6); }
+
+/* Tela de conferência */
+.e4-conf-overlay {
+  position: fixed; inset: 0; z-index: 500;
+  background: var(--navy); display: flex; flex-direction: column;
+}
+.e4-conf-header {
+  padding: 14px 16px; padding-top: calc(14px + env(safe-area-inset-top,0));
+  display: flex; align-items: center; gap: 12px;
+  border-bottom: 1px solid var(--border2); flex-shrink: 0;
+  background: var(--surface);
+}
+.e4-conf-title  { font-size: 16px; font-weight: 800; color: var(--text); flex: 1; }
+.e4-conf-sub    { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.e4-conf-body   { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0; }
+
+/* Imagem do cartão com overlay de bolhas */
+.e4-img-wrap {
+  position: relative; background: #111;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; max-height: 45vh; overflow: hidden;
+}
+.e4-img-wrap canvas { max-width: 100%; max-height: 45vh; display: block; }
+
+/* Lista de conferência */
+.e4-q-list  { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+.e4-q-row   {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--r-md);
+  background: var(--surface); border: 1px solid var(--border2);
+  cursor: pointer; transition: background .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.e4-q-row:active { background: var(--surface2); }
+.e4-q-row.ok     { border-color: rgba(0,200,130,.25); }
+.e4-q-row.dupla  { border-color: rgba(245,166,35,.5); background: rgba(245,166,35,.07); }
+.e4-q-row.vazia  { border-color: rgba(230,57,70,.4); background: rgba(230,57,70,.06); }
+.e4-q-row.anulada{ border-color: var(--border2); opacity: .6; }
+.e4-q-row.revisada{ border-color: rgba(0,180,216,.4); }
+.e4-q-num  { font-family: var(--mono); font-size: 12px; color: var(--text-dim); width: 22px; flex-shrink: 0; }
+.e4-q-gab  { width: 24px; height: 24px; border-radius: 50%; background: rgba(0,180,216,.15); border: 1.5px solid var(--cyan); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: var(--cyan); flex-shrink: 0; }
+.e4-q-det  { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0; }
+.e4-q-det.ok    { background: var(--green); color: #000; }
+.e4-q-det.wrong { background: var(--red); color: #fff; }
+.e4-q-det.vazia { background: var(--surface3); color: var(--text-dim); }
+.e4-q-det.dupla { background: var(--yellow); color: #000; }
+.e4-q-det.anulada { background: var(--surface3); color: var(--text-dim); }
+.e4-q-det.revisada { background: var(--cyan); color: var(--navy); }
+.e4-q-label { flex: 1; font-size: 12px; color: var(--text-muted); }
+.e4-q-warn  { font-size: 16px; flex-shrink: 0; }
+.e4-q-arrow { font-size: 14px; color: var(--text-dim); flex-shrink: 0; }
+
+.e4-conf-footer {
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom,0px));
+  display: flex; flex-direction: column; gap: 8px;
+  border-top: 1px solid var(--border2); flex-shrink: 0;
+  background: var(--navy);
+}
+.e4-nota-badge {
+  display: flex; align-items: center; justify-content: center;
+  gap: 12px; padding: 12px 16px;
+  background: var(--surface); border-radius: var(--r-md);
+  border: 1px solid var(--border2);
+}
+.e4-nota-label { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+.e4-nota-value { font-size: 28px; font-weight: 900; color: var(--cyan); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.e4-nota-max   { font-size: 13px; color: var(--text-dim); }
+
+/* Seletor de alternativa (popup) */
+.e4-alt-modal {
+  position: fixed; inset: 0; z-index: 600;
+  background: rgba(0,0,0,.65); backdrop-filter: blur(4px);
+  display: flex; align-items: flex-end; animation: fade-in .15s ease;
+}
+.e4-alt-sheet {
+  background: var(--surface); border-radius: 20px 20px 0 0;
+  width: 100%; padding: 20px 20px calc(20px + env(safe-area-inset-bottom,0px));
+  animation: slide-up .25s cubic-bezier(.34,1.56,.64,1);
+}
+.e4-alt-title { font-size: 16px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+.e4-alt-sub   { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+.e4-alt-grid  { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.e4-alt-btn {
+  flex: 1; min-width: 52px; max-width: 70px; height: 52px; border-radius: 50%;
+  border: 2.5px solid var(--border); background: var(--surface2);
+  font-size: 16px; font-weight: 800; color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all .15s; -webkit-tap-highlight-color: transparent;
+}
+.e4-alt-btn:active { transform: scale(.9); }
+.e4-alt-btn.detected { border-color: var(--yellow); color: var(--yellow); background: rgba(245,166,35,.1); }
+.e4-alt-btn.correta  { border-color: var(--cyan); color: var(--cyan); background: rgba(0,180,216,.1); }
+.e4-alt-btn.anular   { border-color: var(--red); color: var(--red); background: rgba(230,57,70,.1); min-width: 100%; max-width: none; height: 40px; border-radius: var(--r-md); font-size: 13px; }
+  `;
+  document.head.appendChild(style);
+})();
+
+/* ══════════════════════════════════════
+   PASSO 1 — SELEÇÃO DE ALUNO
+══════════════════════════════════════ */
+async function iniciarCorrecao(provaId) {
+  await loadCache();
+  const prova = cache.provas?.find(p => p.id === provaId);
+  if (!prova) { toast('Prova não encontrada', 'error'); return; }
+
+  corr.provaId = provaId;
+  corr.prova   = prova;
+  corr.alunoId = null;
+  corr.aluno   = null;
+
+  const alunosDaTurma = (cache.alunos || [])
+    .filter(a => a.turmaId === prova.turmaId)
+    .sort((a, b) => (a.numeroLista || 999) - (b.numeroLista || 999) || a.nome.localeCompare(b.nome, 'pt-BR'));
+
+  if (!alunosDaTurma.length) {
+    toast('Nenhum aluno cadastrado nesta turma', 'error');
+    return;
+  }
+
+  let alunosHtml = alunosDaTurma.map(a => `
+    <div class="aluno-item" style="border-radius:var(--r-md);border:1px solid var(--border2);margin-bottom:6px;background:var(--surface)"
+         onclick="selecionarAluno('${a.id}',this)">
+      <div class="aluno-avatar" id="av-${a.id}">${initials(a.nome)}</div>
+      <div class="aluno-info">
+        <div class="aluno-name">${escapeHtml(a.nome)}</div>
+        <div class="aluno-sub">${a.numeroLista ? '#' + a.numeroLista : 'sem nº'}</div>
+      </div>
+    </div>`).join('');
+
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Selecionar aluno</div>
+    <div style="font-size:13px;color:var(--text-muted);margin-top:-8px">${escapeHtml(prova.nome)} · ${escapeHtml(prova.turmaNome||prova.turmaId)}</div>
+    <div style="max-height:55vh;overflow-y:auto;padding-right:2px">${alunosHtml}</div>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+function selecionarAluno(alunoId, rowEl) {
+  const aluno = (cache.alunos || []).find(a => a.id === alunoId);
+  if (!aluno) return;
+  corr.alunoId = alunoId;
+  corr.aluno   = aluno;
+
+  // Feedback visual
+  document.querySelectorAll('.aluno-item').forEach(el => {
+    el.style.borderColor = 'var(--border2)';
+    el.style.background  = 'var(--surface)';
+  });
+  rowEl.style.borderColor = 'var(--cyan)';
+  rowEl.style.background  = 'rgba(0,180,216,.08)';
+
+  setTimeout(() => {
+    closeModal();
+    abrirCamera();
+  }, 180);
+}
+
+/* ══════════════════════════════════════
+   PASSO 2 — CÂMERA
+══════════════════════════════════════ */
+function abrirCamera() {
+  const isLandscape = calcLayout(corr.prova.numQuestoes, corr.prova.numAlternativas || 5).isLandscape;
+  corr.layout = calcLayout(corr.prova.numQuestoes, corr.prova.numAlternativas || 5);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'e4-overlay';
+  overlay.id = 'e4-cam-overlay';
+  overlay.innerHTML = `
+    <video id="e4-video" autoplay playsinline muted></video>
+    <canvas id="e4-canvas"></canvas>
+
+    <div class="e4-cam-top">
+      <div class="e4-cam-close" onclick="fecharCamera()">✕</div>
+      <div class="e4-cam-info">
+        <div class="e4-cam-prova">${escapeHtml(corr.prova.nome)}</div>
+        <div class="e4-cam-aluno">📍 ${escapeHtml(corr.aluno.nome)}</div>
+      </div>
+    </div>
+
+    <div class="e4-guide">
+      <div class="e4-frame${isLandscape ? '' : ' portrait'}">
+        <div class="e4-corner tl"></div>
+        <div class="e4-corner tr"></div>
+        <div class="e4-corner bl"></div>
+        <div class="e4-corner br"></div>
+        <div class="e4-guide-label">Alinhe o cartão-resposta dentro do guia</div>
+      </div>
+    </div>
+
+    <div class="e4-cam-bar">
+      <div class="e4-cam-side" onclick="fecharCamera()">
+        <div class="e4-cam-side-btn">✕</div>
+        <div class="e4-cam-side-lbl">Cancelar</div>
+      </div>
+      <div class="e4-shutter" onclick="fotografar()">
+        <div class="e4-shutter-inner"></div>
+      </div>
+      <div class="e4-cam-side" onclick="trocarCamera()">
+        <div class="e4-cam-side-btn">🔄</div>
+        <div class="e4-cam-side-lbl">Girar</div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  iniciarStream();
+}
+
+let _facingMode = 'environment';
+async function iniciarStream() {
+  try {
+    if (corr.stream) corr.stream.getTracks().forEach(t => t.stop());
+    corr.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: _facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+    const video = document.getElementById('e4-video');
+    if (video) { video.srcObject = corr.stream; await video.play(); }
+  } catch (e) {
+    toast('Câmera não disponível: ' + e.message, 'error');
+    fecharCamera();
+  }
+}
+
+function trocarCamera() {
+  _facingMode = _facingMode === 'environment' ? 'user' : 'environment';
+  iniciarStream();
+}
+
+function fecharCamera() {
+  if (corr.stream) { corr.stream.getTracks().forEach(t => t.stop()); corr.stream = null; }
+  document.getElementById('e4-cam-overlay')?.remove();
+}
+
+/* ══════════════════════════════════════
+   PASSO 3 — CAPTURA + PROCESSAMENTO
+══════════════════════════════════════ */
+async function fotografar() {
+  const video  = document.getElementById('e4-video');
+  const canvas = document.getElementById('e4-canvas');
+  if (!video || !canvas) return;
+
+  // Congela frame no canvas
+  canvas.width  = video.videoWidth  || 1280;
+  canvas.height = video.videoHeight || 720;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  corr.imgData   = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  corr.imgWidth  = canvas.width;
+  corr.imgHeight = canvas.height;
+
+  // Mostra spinner de processamento
+  const overlay = document.getElementById('e4-cam-overlay');
+  const proc = document.createElement('div');
+  proc.className = 'e4-processing';
+  proc.innerHTML = `
+    <div class="e4-proc-spin"></div>
+    <div class="e4-proc-label">Analisando cartão...</div>
+    <div class="e4-proc-sub" id="e4-proc-sub">Detectando marcadores</div>
+  `;
+  overlay?.appendChild(proc);
+
+  // Para stream para liberar câmera enquanto processa
+  if (corr.stream) { corr.stream.getTracks().forEach(t => t.stop()); corr.stream = null; }
+
+  try {
+    await processarCartao(proc);
+  } catch (e) {
+    console.error('Processamento falhou:', e);
+    proc.remove();
+    mostrarErroProcessamento(e.message || 'Erro ao processar imagem');
+  }
+}
+
+/* ══════════════════════════════════════
+   PROCESSAMENTO OpenCV
+══════════════════════════════════════ */
+function atualizarSubtitulo(proc, msg) {
+  const el = proc?.querySelector('#e4-proc-sub');
+  if (el) el.textContent = msg;
+}
+
+async function processarCartao(proc) {
+  // Aguarda OpenCV carregar (timeout 8s)
+  const cvReady = await new Promise(resolve => {
+    if (window._opencvReady && window.cv) { resolve(true); return; }
+    let t = 0;
+    const interval = setInterval(() => {
+      t += 200;
+      if (window.cv) { window._opencvReady = true; clearInterval(interval); resolve(true); }
+      else if (t > 8000) { clearInterval(interval); resolve(false); }
+    }, 200);
+  });
+
+  if (!cvReady || !window.cv) {
+    throw new Error('OpenCV não carregou. Verifique sua conexão e tente novamente.');
+  }
+
+  const cv = window.cv;
+  atualizarSubtitulo(proc, 'Detectando marcadores fiduciais...');
+  await sleep(30);
+
+  // ── Carrega imagem no OpenCV ──
+  const src = cv.matFromImageData(corr.imgData);
+  const gray = new cv.Mat();
+  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+  // ── Binarização adaptativa ──
+  const bin = new cv.Mat();
+  cv.adaptiveThreshold(gray, bin, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 31, 8);
+
+  // ── Detecta marcadores fiduciais ──
+  atualizarSubtitulo(proc, 'Localizando marcadores...');
+  await sleep(30);
+  const fiduciais = detectarFiduciais(cv, bin, src.cols, src.rows);
+
+  let warpedCanvas;
+  if (fiduciais.length === 4) {
+    atualizarSubtitulo(proc, 'Corrigindo perspectiva...');
+    await sleep(30);
+    warpedCanvas = await corrigirPerspectiva(cv, src, fiduciais);
+  } else {
+    // Fallback: usa imagem inteira recortada
+    console.warn('Apenas', fiduciais.length, 'fiduciais detectados — usando fallback');
+    warpedCanvas = await fallbackRecorte(cv, src, fiduciais);
+  }
+
+  atualizarSubtitulo(proc, 'Lendo bolhas...');
+  await sleep(30);
+
+  // ── Lê bolhas no cartão corrigido ──
+  const resultado = lerBolhas(warpedCanvas, corr.prova);
+
+  // Limpeza de memória OpenCV
+  src.delete(); gray.delete(); bin.delete();
+
+  corr.detected = resultado.respostas;
+  corr.duplas   = resultado.duplas;
+  corr.revisao  = {};
+
+  document.getElementById('e4-cam-overlay')?.remove();
+  mostrarConferencia(warpedCanvas, resultado);
+}
+
+/* ── Detecção de fiduciais ──
+   Procura por quadrados pretos com ponto branco interno.
+   Estratégia: contornos externos grandes + verificação de ponto branco interior.
+*/
+function detectarFiduciais(cv, bin, imgW, imgH) {
+  const contours = new cv.MatVector();
+  const hierarchy = new cv.Mat();
+  cv.findContours(bin, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+  const minArea = (imgW * imgH) * 0.0005;  // ≥ 0.05% da imagem
+  const maxArea = (imgW * imgH) * 0.015;   // ≤ 1.5% da imagem
+  const candidates = [];
+
+  for (let i = 0; i < contours.size(); i++) {
+    const cnt = contours.get(i);
+    const area = cv.contourArea(cnt);
+    if (area < minArea || area > maxArea) { cnt.delete(); continue; }
+
+    const peri = cv.arcLength(cnt, true);
+    const approx = new cv.Mat();
+    cv.approxPolyDP(cnt, approx, 0.04 * peri, true);
+
+    if (approx.rows === 4) {
+      const r = cv.boundingRect(cnt);
+      const aspect = r.width / r.height;
+      if (aspect > 0.6 && aspect < 1.6) {
+        candidates.push({ x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height, r });
+      }
+    }
+    approx.delete(); cnt.delete();
+  }
+  contours.delete(); hierarchy.delete();
+
+  if (candidates.length < 4) return candidates;
+
+  // Seleciona os 4 que ficam mais próximos dos cantos da imagem
+  const corners = [
+    { refX: 0,    refY: 0    },  // TL
+    { refX: imgW, refY: 0    },  // TR
+    { refX: 0,    refY: imgH },  // BL
+    { refX: imgW, refY: imgH },  // BR
+  ];
+
+  return corners.map(({ refX, refY }) => {
+    let best = null, bestDist = Infinity;
+    candidates.forEach(c => {
+      const d = Math.hypot(c.x - refX, c.y - refY);
+      if (d < bestDist) { bestDist = d; best = c; }
+    });
+    return best;
+  }).filter(Boolean);
+}
+
+/* ── Correção de perspectiva via warp ── */
+async function corrigirPerspectiva(cv, src, fiduciais) {
+  // fiduciais: [TL, TR, BL, BR] (centros)
+  const [tl, tr, bl, br] = fiduciais;
+
+  const L = corr.layout;
+  const DPI = 150; // resolução do warp — suficiente para ler bolhas
+  const pxMM = DPI / 25.4;
+  const outW  = Math.round(L.W  * pxMM);
+  const outH  = Math.round(L.H  * pxMM);
+
+  // Pontos fonte (centros dos fiduciais na foto)
+  const srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
+    tl.x, tl.y,
+    tr.x, tr.y,
+    bl.x, bl.y,
+    br.x, br.y,
+  ]);
+
+  // Pontos destino (posição esperada no cartão em pixels de saída)
+  const fmCX = (CARTAO.FM_PAD_MM + CARTAO.FM_SIZE_MM / 2) * pxMM;
+  const dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
+    fmCX,        fmCX,
+    outW-fmCX,   fmCX,
+    fmCX,        outH-fmCX,
+    outW-fmCX,   outH-fmCX,
+  ]);
+
+  const M = cv.getPerspectiveTransform(srcPts, dstPts);
+  const warped = new cv.Mat();
+  const dsize = new cv.Size(outW, outH);
+  cv.warpPerspective(src, warped, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar(255,255,255,255));
+
+  srcPts.delete(); dstPts.delete(); M.delete();
+
+  // Converte para canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = outW; canvas.height = outH;
+  cv.imshow(canvas, warped);
+  warped.delete();
+  return canvas;
+}
+
+/* ── Fallback sem perspectiva ── */
+async function fallbackRecorte(cv, src, fiduciais) {
+  const canvas = document.createElement('canvas');
+  const L = corr.layout;
+  const scale = Math.min(corr.imgWidth / (L.W * 4), corr.imgHeight / (L.H * 4));
+  canvas.width  = Math.round(L.W  * scale * 4);
+  canvas.height = Math.round(L.H  * scale * 4);
+  const ctx = canvas.getContext('2d');
+  // Cria um canvas a partir da mat original
+  const tmp = new cv.Mat();
+  src.copyTo(tmp);
+  cv.imshow(canvas, tmp);
+  tmp.delete();
+  return canvas;
+}
+
+/* ── Leitura de bolhas ──
+   Recria o mesmo layout da Etapa 3, mede escuridão de cada bolha.
+*/
+function lerBolhas(warpedCanvas, prova) {
+  const L   = corr.layout;
+  const nQ  = prova.numQuestoes;
+  const nA  = prova.numAlternativas || 5;
+  const DPI_LOCAL = warpedCanvas.width / L.W; // px por mm no canvas warpado
+
+  function mmPx(mm) { return mm * DPI_LOCAL; }
+
+  const ctx   = warpedCanvas.getContext('2d');
+  const iData = ctx.getImageData(0, 0, warpedCanvas.width, warpedCanvas.height);
+  const data  = iData.data;
+  const W     = warpedCanvas.width;
+
+  function getPixelBrightness(cx, cy, r) {
+    // Média de escuridão (0=branco, 1=preto) numa circunferência
+    let dark = 0, total = 0;
+    const ri = Math.round(r * 0.75); // raio interno para evitar borda
+    for (let dy = -ri; dy <= ri; dy++) {
+      for (let dx = -ri; dx <= ri; dx++) {
+        if (dx*dx + dy*dy > ri*ri) continue;
+        const px = Math.round(cx + dx);
+        const py = Math.round(cy + dy);
+        if (px < 0 || py < 0 || px >= W || py >= iData.height) continue;
+        const idx = (py * W + px) * 4;
+        const lum = (data[idx] + data[idx+1] + data[idx+2]) / 3;
+        dark  += (255 - lum) / 255;
+        total++;
+      }
+    }
+    return total > 0 ? dark / total : 0;
+  }
+
+  const startX   = mmPx(CARTAO.MARGIN_MM + L.offsetX);
+  const startY   = mmPx(CARTAO.MARGIN_MM);
+  const colWpx   = mmPx(L.colW);
+  const colGppx  = mmPx(L.colGap);
+  const numWpx   = mmPx(L.numW);
+  const bSppx    = mmPx(L.bSpacing);
+  const bRpx     = mmPx(L.bubbleD) / 2;
+  const rowHpx   = mmPx(L.rowH);
+  const THRESH   = 0.18; // escuridão mínima para considerar marcada
+
+  const respostas = {};
+  const duplas    = [];
+  const scores    = {};   // { q: [{alt, score}] } para debug
+
+  for (let col = 0; col < L.nCols; col++) {
+    const colX    = startX + col * (colWpx + colGppx);
+    const qCount  = Math.min(L.rowsPerCol, nQ - col * L.rowsPerCol);
+    if (qCount <= 0) continue;
+
+    for (let row = 0; row < qCount; row++) {
+      const q   = col * L.rowsPerCol + row + 1;
+      const cy  = startY + row * rowHpx + rowHpx / 2;
+      const marcadas = [];
+      scores[q] = [];
+
+      for (let a = 0; a < nA; a++) {
+        const bx = colX + numWpx + a * bSppx + bRpx;
+        const sc = getPixelBrightness(bx, cy, bRpx);
+        scores[q].push({ alt: 'ABCDE'[a], sc });
+        if (sc > THRESH) marcadas.push('ABCDE'[a]);
+      }
+
+      if (marcadas.length === 1) {
+        respostas[q] = marcadas[0];
+      } else if (marcadas.length > 1) {
+        // Dupla marcação: escolhe a mais escura como provável, mas sinaliza
+        const melhor = scores[q].reduce((best, x) => x.sc > best.sc ? x : best);
+        respostas[q] = melhor.alt;
+        duplas.push(q);
+      }
+      // se marcadas.length === 0: questão em branco (respostas[q] fica undefined)
+    }
+  }
+
+  return { respostas, duplas, scores };
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ══════════════════════════════════════
+   ERRO DE PROCESSAMENTO
+══════════════════════════════════════ */
+function mostrarErroProcessamento(msg) {
+  document.getElementById('e4-cam-overlay')?.remove();
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title" style="color:var(--red)">Não consegui ler o cartão</div>
+    <div style="font-size:13px;color:var(--text-muted);line-height:1.6">${escapeHtml(msg)}</div>
+    <div style="padding:12px;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);border-radius:10px;font-size:13px;color:var(--yellow);line-height:1.5">
+      💡 <strong>Dicas:</strong> iluminação uniforme, cartão completamente dentro do guia, câmera estabilizada.
+    </div>
+    <button class="btn btn-cyan" onclick="closeModal();abrirCamera()">Tentar novamente</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+/* ══════════════════════════════════════
+   PASSO 4 — TELA DE CONFERÊNCIA
+══════════════════════════════════════ */
+function mostrarConferencia(warpedCanvas, resultado) {
+  const prova = corr.prova;
+  const nQ    = prova.numQuestoes;
+  const nA    = prova.numAlternativas || 5;
+  const letras = 'ABCDE'.slice(0, nA).split('');
+
+  // Monta overlay de conferência
+  const overlay = document.createElement('div');
+  overlay.className = 'e4-conf-overlay';
+  overlay.id = 'e4-conf-overlay';
+  document.body.appendChild(overlay);
+
+  // Renderiza overlay de bolhas na imagem
+  const displayCanvas = document.createElement('canvas');
+  displayCanvas.width  = warpedCanvas.width;
+  displayCanvas.height = warpedCanvas.height;
+  const dCtx = displayCanvas.getContext('2d');
+  dCtx.drawImage(warpedCanvas, 0, 0);
+  desenharOverlayBolhas(dCtx, resultado);
+
+  const imgWrap = document.createElement('div');
+  imgWrap.className = 'e4-img-wrap';
+  imgWrap.appendChild(displayCanvas);
+
+  // Lista de questões
+  const qList = document.createElement('div');
+  qList.className = 'e4-q-list';
+  qList.id = 'e4-q-list';
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'e4-conf-header';
+  header.innerHTML = `
+    <div class="wizard-back-btn" onclick="descartarConferencia()">←</div>
+    <div>
+      <div class="e4-conf-title">${escapeHtml(corr.aluno.nome)}</div>
+      <div class="e4-conf-sub">${escapeHtml(prova.nome)} · Confira e corrija se necessário</div>
+    </div>
+  `;
+
+  // Footer
+  const footer = document.createElement('div');
+  footer.className = 'e4-conf-footer';
+  footer.id = 'e4-conf-footer';
+
+  overlay.appendChild(header);
+  const body = document.createElement('div');
+  body.className = 'e4-conf-body';
+  body.appendChild(imgWrap);
+  body.appendChild(qList);
+  overlay.appendChild(body);
+  overlay.appendChild(footer);
+
+  renderQList();
+  renderNota();
+}
+
+function descartarConferencia() {
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Descartar correção?</div>
+    <div style="font-size:14px;color:var(--text-muted)">Os dados da leitura serão perdidos.</div>
+    <button class="btn btn-danger" onclick="closeModal();document.getElementById('e4-conf-overlay')?.remove()">Sim, descartar</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Continuar revisando</button>
+  `);
+}
+
+function renderQList() {
+  const qList = document.getElementById('e4-q-list');
+  if (!qList) return;
+  const prova = corr.prova;
+  const nQ  = prova.numQuestoes;
+  const nA  = prova.numAlternativas || 5;
+  let html  = '';
+
+  for (let q = 1; q <= nQ; q++) {
+    const gabarito = prova.gabarito?.[q];
+    const anulada  = prova.anuladas?.[q];
+    const detectada = corr.detected[q];
+    const revisada  = corr.revisao[q];
+    const resp      = revisada !== undefined ? revisada : detectada;
+    const dupla     = corr.duplas.includes(q) && revisada === undefined;
+
+    let status, detClass, detLabel, warnIcon, rowClass;
+
+    if (anulada) {
+      status = 'anulada'; detClass = 'anulada'; detLabel = '—'; rowClass = 'anulada'; warnIcon = '';
+    } else if (revisada !== undefined) {
+      status = 'revisada'; detClass = 'revisada'; detLabel = revisada === 'ANULADA' ? '✕' : revisada; rowClass = 'revisada'; warnIcon = '✏️';
+    } else if (dupla) {
+      status = 'dupla'; detClass = 'dupla'; detLabel = resp || '?'; rowClass = 'dupla'; warnIcon = '⚠️';
+    } else if (!resp) {
+      status = 'vazia'; detClass = 'vazia'; detLabel = '·'; rowClass = 'vazia'; warnIcon = '❓';
+    } else if (resp === gabarito) {
+      status = 'ok'; detClass = 'ok'; detLabel = resp; rowClass = 'ok'; warnIcon = '✓';
+    } else {
+      status = 'wrong'; detClass = 'wrong'; detLabel = resp; rowClass = ''; warnIcon = '';
+    }
+
+    const tappable = !anulada;
+    html += `
+    <div class="e4-q-row ${rowClass}" id="qrow-${q}" ${tappable ? `onclick="abrirSeletorAlt(${q})"` : ''}>
+      <div class="e4-q-num">${q}</div>
+      <div class="e4-q-gab">${gabarito || '—'}</div>
+      <div class="e4-q-det ${detClass}">${detLabel}</div>
+      <div class="e4-q-label">${
+        anulada  ? 'Anulada — não conta' :
+        dupla    ? 'Dupla marcação detectada' :
+        !resp    ? 'Sem marcação — toque para definir' :
+        revisada !== undefined ? 'Corrigida manualmente' :
+        resp === gabarito ? 'Correta' : 'Incorreta'
+      }</div>
+      ${warnIcon ? `<div class="e4-q-warn">${warnIcon}</div>` : ''}
+      ${tappable ? `<div class="e4-q-arrow">›</div>` : ''}
+    </div>`;
+  }
+  qList.innerHTML = html;
+}
+
+function renderNota() {
+  const footer = document.getElementById('e4-conf-footer');
+  if (!footer) return;
+  const { nota, max } = calcularNota();
+  const duplas   = corr.duplas.filter(q => corr.revisao[q] === undefined).length;
+  const vazias   = Object.keys(corr.detected).filter(q => !corr.detected[q] && corr.revisao[q] === undefined && !corr.prova.anuladas?.[q]).length;
+  const avisos   = duplas + vazias;
+
+  footer.innerHTML = `
+    <div class="e4-nota-badge">
+      <div class="e4-nota-label">NOTA</div>
+      <div class="e4-nota-value">${nota.toFixed(1)}</div>
+      <div class="e4-nota-max">/ ${max.toFixed(1)}</div>
+    </div>
+    ${avisos > 0 ? `<div style="font-size:12px;color:var(--yellow);text-align:center;line-height:1.5">⚠️ ${duplas > 0 ? duplas+' dupla'+( duplas>1?'s':'')+' marcação' : ''} ${duplas>0&&vazias>0?'· ':''} ${vazias > 0 ? vazias+' questão'+( vazias>1?'ões':'')+' em branco' : ''} — toque para resolver</div>` : ''}
+    <button class="btn btn-cyan" ${avisos>0?'style="opacity:.7"':''} onclick="confirmarSalvar()">
+      ${avisos > 0 ? '⚠️ Salvar mesmo assim' : '✓ Confirmar e salvar'}
+    </button>
+    <button class="btn btn-ghost" onclick="descartarConferencia()">Descartar</button>
+  `;
+}
+
+function calcularNota() {
+  const prova = corr.prova;
+  const nQ    = prova.numQuestoes;
+  let acertos = 0, max = 0;
+
+  for (let q = 1; q <= nQ; q++) {
+    const gabarito = prova.gabarito?.[q];
+    const anulada  = prova.anuladas?.[q];
+    if (anulada) { continue; } // anulada: não entra no máximo nem no acerto (pode mudar conforme regra)
+    const peso = parseFloat(prova.pesos?.[q] || 1);
+    max += peso;
+    const resp = corr.revisao[q] !== undefined ? corr.revisao[q] : corr.detected[q];
+    if (resp && resp !== 'ANULADA' && resp === gabarito) acertos += peso;
+  }
+  return { nota: acertos, max };
+}
+
+/* ══════════════════════════════════════
+   SELETOR DE ALTERNATIVA (popup)
+══════════════════════════════════════ */
+function abrirSeletorAlt(q) {
+  const prova   = corr.prova;
+  const nA      = prova.numAlternativas || 5;
+  const letras  = 'ABCDE'.slice(0, nA).split('');
+  const gabarito = prova.gabarito?.[q];
+  const detectada = corr.detected[q];
+  const revisada  = corr.revisao[q];
+  const dupla     = corr.duplas.includes(q);
+
+  const sheet = document.createElement('div');
+  sheet.className = 'e4-alt-modal';
+  sheet.id = 'e4-alt-modal';
+  sheet.onclick = e => { if (e.target === sheet) sheet.remove(); };
+
+  const btns = letras.map(alt => {
+    const isDetected = detectada === alt || (dupla && alt === detectada);
+    const isCorreta  = gabarito === alt;
+    const isRev      = revisada === alt;
+    const cls = isRev ? 'detected' : isDetected ? 'detected' : isCorreta ? 'correta' : '';
+    return `<div class="e4-alt-btn ${cls}" onclick="aplicarRevisao(${q},'${alt}')">${alt}</div>`;
+  }).join('');
+
+  sheet.innerHTML = `
+    <div class="e4-alt-sheet">
+      <div class="e4-alt-title">Questão ${q}</div>
+      <div class="e4-alt-sub">Gabarito: <strong style="color:var(--cyan)">${gabarito || '—'}</strong> · Detectada: <strong style="color:var(--yellow)">${detectada || 'nenhuma'}</strong>${revisada !== undefined ? ` · Revisão: <strong style="color:var(--cyan)">${revisada === 'ANULADA' ? 'Anulada' : revisada}</strong>` : ''}</div>
+      <div class="e4-alt-grid">${btns}</div>
+      <div class="e4-alt-btn anular" onclick="aplicarRevisao(${q},'ANULADA')">✕ Anular esta questão</div>
+      ${revisada !== undefined ? `<div class="e4-alt-btn" style="border-color:var(--border);color:var(--text-muted);margin-top:8px;min-width:100%;max-width:none;height:40px;border-radius:var(--r-md);font-size:13px" onclick="removerRevisao(${q})">↩ Usar resultado detectado</div>` : ''}
+    </div>
+  `;
+  document.body.appendChild(sheet);
+}
+
+function aplicarRevisao(q, alt) {
+  corr.revisao[q] = alt;
+  document.getElementById('e4-alt-modal')?.remove();
+  renderQList();
+  renderNota();
+  // Atualiza destaque na imagem
+  atualizarImagemConf();
+}
+
+function removerRevisao(q) {
+  delete corr.revisao[q];
+  document.getElementById('e4-alt-modal')?.remove();
+  renderQList();
+  renderNota();
+  atualizarImagemConf();
+}
+
+function atualizarImagemConf() {
+  const wrap = document.querySelector('.e4-img-wrap');
+  if (!wrap) return;
+  const canvas = wrap.querySelector('canvas');
+  if (!canvas || !window._warpedCanvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(window._warpedCanvas, 0, 0);
+  desenharOverlayBolhas(ctx, { respostas: corr.detected, duplas: corr.duplas });
+}
+
+/* ── Desenha overlay de bolhas sobre o cartão ── */
+function desenharOverlayBolhas(ctx, resultado) {
+  const L   = corr.layout;
+  const prova = corr.prova;
+  const nQ  = prova.numQuestoes;
+  const nA  = prova.numAlternativas || 5;
+  const W   = ctx.canvas.width;
+  const DPI_LOCAL = W / L.W;
+
+  function mmPx(mm) { return mm * DPI_LOCAL; }
+
+  const startX  = mmPx(CARTAO.MARGIN_MM + L.offsetX);
+  const startY  = mmPx(CARTAO.MARGIN_MM);
+  const colWpx  = mmPx(L.colW);
+  const colGppx = mmPx(L.colGap);
+  const numWpx  = mmPx(L.numW);
+  const bSppx   = mmPx(L.bSpacing);
+  const bRpx    = mmPx(L.bubbleD) / 2;
+  const rowHpx  = mmPx(L.rowH);
+
+  for (let col = 0; col < L.nCols; col++) {
+    const colX   = startX + col * (colWpx + colGppx);
+    const qCount = Math.min(L.rowsPerCol, nQ - col * L.rowsPerCol);
+
+    for (let row = 0; row < qCount; row++) {
+      const q  = col * L.rowsPerCol + row + 1;
+      const cy = startY + row * rowHpx + rowHpx / 2;
+      const det = resultado.respostas[q];
+      const isDupla = (resultado.duplas || []).includes(q);
+      const rev = corr.revisao[q];
+
+      for (let a = 0; a < nA; a++) {
+        const alt = 'ABCDE'[a];
+        const bx  = colX + numWpx + a * bSppx + bRpx;
+        const isMarcada = det === alt;
+        const isRev = rev === alt;
+
+        if (isMarcada || isRev) {
+          ctx.beginPath();
+          ctx.arc(bx, cy, bRpx * 0.85, 0, Math.PI * 2);
+          if (isRev) {
+            ctx.fillStyle = 'rgba(0,180,216,0.55)';
+            ctx.strokeStyle = '#00D4FF';
+          } else if (isDupla) {
+            ctx.fillStyle = 'rgba(245,166,35,0.5)';
+            ctx.strokeStyle = '#F5A623';
+          } else {
+            ctx.fillStyle = 'rgba(0,180,216,0.45)';
+            ctx.strokeStyle = '#00B4D8';
+          }
+          ctx.lineWidth = bRpx * 0.2;
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+    }
+  }
+}
+
+/* ══════════════════════════════════════
+   PASSO 5 — SALVAR NO FIRESTORE
+══════════════════════════════════════ */
+async function confirmarSalvar() {
+  const duplas = corr.duplas.filter(q => corr.revisao[q] === undefined).length;
+  const vazias = [];
+  const prova  = corr.prova;
+  for (let q = 1; q <= prova.numQuestoes; q++) {
+    if (!prova.anuladas?.[q]) {
+      const resp = corr.revisao[q] !== undefined ? corr.revisao[q] : corr.detected[q];
+      if (!resp) vazias.push(q);
+    }
+  }
+
+  if (duplas > 0 || vazias.length > 0) {
+    const msgs = [];
+    if (duplas > 0) msgs.push(`${duplas} questão${duplas>1?'ões':''} com dupla marcação`);
+    if (vazias.length > 0) msgs.push(`${vazias.length} questão${vazias.length>1?'ões':''} em branco`);
+    showModal(`
+      <div class="modal-handle"></div>
+      <div class="modal-title">Salvar mesmo assim?</div>
+      <div style="font-size:14px;color:var(--text-muted);line-height:1.5">Ainda há problemas: ${msgs.join(' e ')}. Questões sem resposta valem zero.</div>
+      <button class="btn btn-cyan" id="btn-conf-salvar" onclick="executarSalvar()">Salvar assim mesmo</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Continuar revisando</button>
+    `);
+  } else {
+    executarSalvar();
+  }
+}
+
+async function executarSalvar() {
+  closeModal();
+  const btn = document.querySelector('#e4-conf-footer .btn-cyan');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Salvando...'; }
+
+  try {
+    const prova = corr.prova;
+    const nQ    = prova.numQuestoes;
+
+    // Monta respostas finais (detected + revisao)
+    const respostas = {};
+    for (let q = 1; q <= nQ; q++) {
+      const r = corr.revisao[q] !== undefined ? corr.revisao[q] : (corr.detected[q] || null);
+      respostas[q] = r;
+    }
+
+    // Calcula acertos, nota e detalhes por questão
+    const detalhe = {};
+    let acertos = 0, max = 0;
+    for (let q = 1; q <= nQ; q++) {
+      const anulada  = prova.anuladas?.[q];
+      const gabarito = prova.gabarito?.[q];
+      const peso     = parseFloat(prova.pesos?.[q] || 1);
+      const resp     = respostas[q];
+      if (anulada) { detalhe[q] = { resp, status: 'anulada', pontos: 0 }; continue; }
+      max += peso;
+      const ok = resp && resp !== 'ANULADA' && resp === gabarito;
+      if (ok) acertos += peso;
+      detalhe[q] = { resp, status: ok ? 'correta' : !resp ? 'branco' : 'errada', pontos: ok ? peso : 0 };
+    }
+
+    const resultado = {
+      provaId:    prova.id,
+      provaNome:  prova.nome,
+      disciplina: prova.disciplina || '',
+      turmaId:    prova.turmaId,
+      turmaNome:  prova.turmaNome || '',
+      alunoId:    corr.alunoId,
+      alunoNome:  corr.aluno.nome,
+      respostas,
+      detalhe,
+      nota:       parseFloat(acertos.toFixed(2)),
+      notaMax:    parseFloat(max.toFixed(2)),
+      duplas:     corr.duplas,
+      corrigidoEm: firebase.firestore.FieldValue.serverTimestamp(),
+      corrigidoPor: auth.currentUser?.uid || '',
+    };
+
+    // Verifica se já existe resultado para esse aluno/prova (sobrescreve)
+    const existSnap = await ref.resultados()
+      .where('provaId','==', prova.id)
+      .where('alunoId','==', corr.alunoId)
+      .limit(1).get();
+
+    if (!existSnap.empty) {
+      await existSnap.docs[0].ref.update(resultado);
+    } else {
+      await ref.resultados().add(resultado);
+    }
+
+    document.getElementById('e4-conf-overlay')?.remove();
+    toast(`✓ Nota: ${acertos.toFixed(1)} / ${max.toFixed(1)} — salvo!`, 'success');
+
+  } catch (e) {
+    toast('Erro ao salvar: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '✓ Confirmar e salvar'; }
+  }
+}
+
+/* initials() defined in core */
+
+
 </script>
 </body>
 </html>
