@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
 <title>Leitor de Gabaritos</title>
-<!-- build: v3 (Etapa 3 — Gabarito em PDF) -->
+<!-- build: v2 (Etapa 2 — CRUD Turmas, Alunos, Provas) -->
 
 <!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════════
-   ETAPA 3 — Gerador de Gabarito PDF
+   ETAPA 2 — CRUD Turmas, Alunos, Provas
 ════════════════════════════════════════════════════════════════ */
 
 /* Refs Firestore */
@@ -715,11 +715,13 @@ function marcarGab(q, L) {
     row.querySelectorAll('.gab-bubble').forEach(el => {
       el.classList.toggle('selected', el.dataset.l === L);
     });
-    // Atualiza contador no topo
+    // Atualiza contador e estado do botão Próximo
     const total    = wizard.data.numQuestoes;
     const marcadas = Object.values(wizard.data.gabarito).filter(Boolean).length;
     const counter  = document.getElementById('gab-counter');
     if (counter) counter.textContent = `${marcadas} de ${total} marcadas`;
+    const btnNext = document.querySelector('.wizard-footer .btn-cyan');
+    if (btnNext) btnNext.disabled = marcadas < total;
   } else {
     // Fallback: re-renderiza preservando scroll
     const container = document.getElementById('app-content');
