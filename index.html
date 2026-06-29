@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
 <title>Leitor de Gabaritos</title>
-<!-- build: v4.1 (Etapa 4.1 — Multi-escola, Gestão/Coordenação/Professor) -->
+<!-- build: v5 (Etapa 5 — Resultados e Boletim) -->
 
 <!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -261,13 +261,13 @@ async function abrirTurma(id) {
 
 function alunoRowHtml(a) {
   return `
-    <div class="aluno-row">
+    <div class="aluno-row" onclick="abrirBoletimAluno(&apos;${a.id}&apos;)" style="cursor:pointer">
       <div class="aluno-avatar">${escapeHtml(initials(a.nome))}</div>
       <div class="aluno-name">${escapeHtml(a.nome)}</div>
       ${a.matricula ? `<span class="aluno-mat">${escapeHtml(a.matricula)}</span>` : ''}
       <div class="aluno-actions">
-        <button class="icon-btn" onclick='openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'>✏️</button>
-        <button class="icon-btn danger" onclick="excluirAluno('${a.id}')">🗑️</button>
+        <button class="icon-btn" onclick='event.stopPropagation();openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'>✏️</button>
+        <button class="icon-btn danger" onclick="event.stopPropagation();excluirAluno('${a.id}')">🗑️</button>
       </div>
     </div>`;
 }
@@ -330,7 +330,7 @@ async function renderAlunos() {
     return;
   }
   listEl.innerHTML = arr.map(a => `
-    <div class="aluno-row">
+    <div class="aluno-row" onclick="abrirBoletimAluno(&apos;${a.id}&apos;)" style="cursor:pointer">
       <div class="aluno-avatar">${escapeHtml(initials(a.nome))}</div>
       <div style="flex:1;min-width:0">
         <div class="aluno-name">${escapeHtml(a.nome)}</div>
@@ -338,8 +338,8 @@ async function renderAlunos() {
       </div>
       ${a.matricula ? `<span class="aluno-mat">${escapeHtml(a.matricula)}</span>` : ''}
       <div class="aluno-actions">
-        <button class="icon-btn" onclick='openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'>✏️</button>
-        <button class="icon-btn danger" onclick="excluirAluno('${a.id}')">🗑️</button>
+        <button class="icon-btn" onclick='event.stopPropagation();openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'>✏️</button>
+        <button class="icon-btn danger" onclick="event.stopPropagation();excluirAluno('${a.id}')">🗑️</button>
       </div>
     </div>`).join('');
 }
@@ -916,7 +916,7 @@ async function abrirProva(id) {
         </div>
         <div class="quick-action-arrow">›</div>
       </div>
-      <div class="quick-action" onclick="toast('Disponível na Etapa 5','')">
+      <div class="quick-action" onclick="abrirResultadosProva('${p.id}')">
         <div class="quick-action-icon blue">📊</div>
         <div class="quick-action-text">
           <div class="quick-action-title">Ver resultados</div>
@@ -5040,5 +5040,457 @@ async function executarSalvar() {
 
 
 </script>
+
+<style>
+/* ═══════════════════════════════════════════════════════
+   ETAPA 5 — RESULTADOS E BOLETIM
+═══════════════════════════════════════════════════════ */
+.res-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+.res-summary .stat-card { padding: 10px 8px; }
+.res-summary .stat-value { font-size: 22px; }
+.res-summary .stat-label { font-size: 10px; }
+
+.res-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 12px 14px;
+  margin-bottom: 8px; cursor: pointer; transition: all .15s;
+}
+.res-row:active { transform: scale(.98); }
+.res-row .res-aluno { flex: 1; min-width: 0; }
+.res-row .res-aluno-nome { font-size: 14px; font-weight: 600; color: var(--text); }
+.res-row .res-aluno-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.res-row .res-nota {
+  font-family: var(--mono); font-size: 18px; font-weight: 700;
+  min-width: 56px; text-align: right;
+}
+.res-row.pend { opacity: .85; }
+.res-row.pend .res-nota { color: var(--text-dim); font-size: 12px; font-weight: 500; }
+
+.res-nota.ok    { color: var(--cyan); }
+.res-nota.warn  { color: #fdb913; }
+.res-nota.fail  { color: #e31b23; }
+
+.res-filtros {
+  display: flex; gap: 8px; padding: 0 16px 12px; flex-wrap: wrap;
+}
+.res-filtros select, .res-filtros input {
+  flex: 1; min-width: 140px;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 8px 10px; font-size: 13px;
+}
+
+/* Detalhe de respostas */
+.res-detalhe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 6px; padding: 0 16px 16px;
+}
+.res-q-cell {
+  display: flex; flex-direction: column; align-items: center;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px 4px;
+  font-family: var(--mono); font-size: 12px;
+}
+.res-q-cell .q-num { font-size: 10px; color: var(--text-muted); }
+.res-q-cell .q-resp { font-weight: 700; font-size: 15px; margin-top: 2px; }
+.res-q-cell.ok   { border-color: var(--cyan); background: rgba(0,168,232,.10); }
+.res-q-cell.ok   .q-resp { color: var(--cyan); }
+.res-q-cell.bad  { border-color: #e31b23; background: rgba(227,27,35,.10); }
+.res-q-cell.bad  .q-resp { color: #e31b23; }
+.res-q-cell.bl   { color: var(--text-dim); }
+.res-q-cell.an   { background: rgba(253,185,19,.12); border-color: #fdb913; }
+.res-q-cell.an   .q-resp { color: #fdb913; }
+
+/* Boletim aluno */
+.bol-prova-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 4px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 12px 14px;
+  margin-bottom: 8px; cursor: pointer; transition: all .15s;
+}
+.bol-prova-row:active { transform: scale(.98); }
+.bol-prova-nome { font-size: 14px; font-weight: 600; color: var(--text); }
+.bol-prova-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.bol-prova-nota {
+  grid-row: 1 / span 2; align-self: center;
+  font-family: var(--mono); font-size: 20px; font-weight: 700;
+  min-width: 64px; text-align: right;
+}
+</style>
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   ETAPA 5 — RESULTADOS POR PROVA E BOLETIM POR ALUNO
+════════════════════════════════════════════════════════════════ */
+
+/* Cache simples de resultados (por escola) */
+const cacheRes = { items: null };
+
+async function loadResultados(force = false) {
+  if (!app.escolaId) return [];
+  if (!force && cacheRes.items) return cacheRes.items;
+  try {
+    const snap = await ref.resultados().get();
+    cacheRes.items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.warn('loadResultados', e);
+    cacheRes.items = [];
+  }
+  return cacheRes.items;
+}
+
+/* Invalida cache em ações relevantes */
+(function hookCacheInvalidation(){
+  // refresh manual: chamado após salvar correção
+  window.invalidaResultadosCache = () => { cacheRes.items = null; };
+})();
+
+/* Classifica nota em ok/warn/fail (escala 0-10 derivada de acertos/max) */
+function classNota(nota, max) {
+  if (!max) return 'warn';
+  const pct = (nota / max) * 10;
+  if (pct >= 7) return 'ok';
+  if (pct >= 5) return 'warn';
+  return 'fail';
+}
+function fmtNota(n) { return (Math.round(n * 10) / 10).toFixed(1); }
+
+/* ─────────────────────────────────────────
+   TELA: RESULTADOS DE UMA PROVA
+───────────────────────────────────────── */
+let _resStateProva = { provaId: null, filtroTurma: 'all', busca: '' };
+
+async function abrirResultadosProva(provaId) {
+  await loadCache();
+  const p = cache.provas.find(x => x.id === provaId);
+  if (!p) { toast('Prova não encontrada','error'); return; }
+  _resStateProva = { provaId, filtroTurma: p.turmaId || 'all', busca: '' };
+  const content = document.getElementById('app-content');
+  content.scrollTop = 0;
+  content.innerHTML = `
+    <div class="detail-header">
+      <div class="back-btn" onclick="abrirProva('${p.id}')">‹</div>
+      <div class="detail-title">Resultados</div>
+    </div>
+    <div style="padding:0 16px 8px">
+      <div style="font-size:13px;color:var(--text-muted)">${escapeHtml(p.nome)}</div>
+    </div>
+    <div class="res-summary" id="res-summary">
+      <div class="stat-card"><div class="stat-label">Corrigidos</div><div class="stat-value cyan" id="res-stat-corr">—</div></div>
+      <div class="stat-card"><div class="stat-label">Média</div><div class="stat-value" id="res-stat-media">—</div></div>
+      <div class="stat-card"><div class="stat-label">Aprovação</div><div class="stat-value yellow" id="res-stat-aprov">—</div></div>
+    </div>
+    <div class="res-filtros" id="res-filtros"></div>
+    <div id="res-list" style="padding:0 16px 24px">
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+    </div>
+  `;
+  renderResultadosProva();
+}
+
+async function renderResultadosProva() {
+  const { provaId } = _resStateProva;
+  await loadCache();
+  const [_, resultados] = await Promise.all([Promise.resolve(), loadResultados()]);
+  const prova = cache.provas.find(x => x.id === provaId);
+  if (!prova) return;
+
+  // Alunos elegíveis: se a prova tem turmaId, só dessa turma. Senão, todos.
+  let alunos = cache.alunos || [];
+  if (prova.turmaId) alunos = alunos.filter(a => a.turmaId === prova.turmaId);
+
+  // Filtro de turma (só faz sentido se prova é da escola toda — sem turmaId)
+  const filtrosEl = document.getElementById('res-filtros');
+  if (!prova.turmaId && filtrosEl) {
+    const turmas = cache.turmas || [];
+    filtrosEl.innerHTML = `
+      <select onchange="_resStateProva.filtroTurma=this.value; renderResultadosProva()">
+        <option value="all" ${_resStateProva.filtroTurma==='all'?'selected':''}>Todas as turmas</option>
+        ${turmas.map(t => `<option value="${t.id}" ${_resStateProva.filtroTurma===t.id?'selected':''}>${escapeHtml(t.nome)}</option>`).join('')}
+      </select>
+      <input type="text" placeholder="Buscar aluno..." value="${escapeHtml(_resStateProva.busca)}"
+             oninput="_resStateProva.busca=this.value; renderResultadosProva()">
+    `;
+    if (_resStateProva.filtroTurma !== 'all') {
+      alunos = alunos.filter(a => a.turmaId === _resStateProva.filtroTurma);
+    }
+  } else if (filtrosEl) {
+    filtrosEl.innerHTML = `
+      <input type="text" placeholder="Buscar aluno..." value="${escapeHtml(_resStateProva.busca)}"
+             oninput="_resStateProva.busca=this.value; renderResultadosProva()">
+    `;
+  }
+
+  if (_resStateProva.busca) {
+    const q = _resStateProva.busca.toLowerCase();
+    alunos = alunos.filter(a => (a.nome||'').toLowerCase().includes(q));
+  }
+  alunos = [...alunos].sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'));
+
+  // Mapa de resultados por alunoId desta prova
+  const resPorAluno = {};
+  for (const r of resultados) {
+    if (r.provaId === provaId) resPorAluno[r.alunoId] = r;
+  }
+
+  // Estatísticas
+  const corrigidos = Object.values(resPorAluno);
+  const somaNotas = corrigidos.reduce((s,r) => s + (r.nota||0), 0);
+  const media = corrigidos.length ? somaNotas / corrigidos.length : 0;
+  const aprovados = corrigidos.filter(r => r.notaMax && (r.nota/r.notaMax) >= 0.6).length;
+  const pctAprov = corrigidos.length ? Math.round((aprovados / corrigidos.length) * 100) : 0;
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('res-stat-corr', `${corrigidos.length}/${alunos.length || corrigidos.length}`);
+  set('res-stat-media', corrigidos.length ? fmtNota(media) : '—');
+  set('res-stat-aprov', corrigidos.length ? `${pctAprov}%` : '—');
+
+  const listEl = document.getElementById('res-list');
+  if (!listEl) return;
+
+  if (!alunos.length && !corrigidos.length) {
+    listEl.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📭</div>
+        <div class="empty-title">Sem alunos</div>
+        <div class="empty-sub">Cadastre alunos na turma para visualizar resultados.</div>
+      </div>`;
+    return;
+  }
+
+  // Se a prova não tem turma vinculada, mostra apenas os alunos com resultado
+  const lista = prova.turmaId ? alunos : alunos.filter(a => resPorAluno[a.id]);
+  // Inclui resultados de alunos que talvez não estejam mais na turma
+  const extrasIds = corrigidos.map(r => r.alunoId).filter(id => !lista.find(a => a.id === id));
+  const extras = extrasIds.map(id => {
+    const r = resPorAluno[id];
+    return { id, nome: r.alunoNome || '(removido)', _extra: true };
+  });
+
+  const finalArr = [...lista, ...extras];
+
+  listEl.innerHTML = finalArr.map(a => {
+    const r = resPorAluno[a.id];
+    if (r) {
+      const cls = classNota(r.nota||0, r.notaMax||1);
+      return `
+        <div class="res-row" onclick="abrirDetalheResultado('${r.id}')">
+          <div class="aluno-avatar">${escapeHtml(initials(a.nome))}</div>
+          <div class="res-aluno">
+            <div class="res-aluno-nome">${escapeHtml(a.nome)}${a._extra?' <span style="font-size:10px;color:var(--text-muted)">(fora da turma)</span>':''}</div>
+            <div class="res-aluno-sub">${r.notaMax ? `${fmtNota(r.nota)} de ${fmtNota(r.notaMax)} · ` : ''}${cls==='ok'?'Aprovado':cls==='warn'?'Recuperação':'Reprovado'}</div>
+          </div>
+          <div class="res-nota ${cls}">${fmtNota(r.nota||0)}</div>
+        </div>`;
+    }
+    return `
+      <div class="res-row pend" onclick="iniciarCorrecao('${prova.id}')">
+        <div class="aluno-avatar">${escapeHtml(initials(a.nome))}</div>
+        <div class="res-aluno">
+          <div class="res-aluno-nome">${escapeHtml(a.nome)}</div>
+          <div class="res-aluno-sub">Aguardando correção</div>
+        </div>
+        <div class="res-nota">Pendente</div>
+      </div>`;
+  }).join('');
+}
+
+/* ─────────────────────────────────────────
+   DETALHE DE UM RESULTADO (respostas q-a-q)
+───────────────────────────────────────── */
+async function abrirDetalheResultado(resultadoId) {
+  const items = await loadResultados();
+  const r = items.find(x => x.id === resultadoId);
+  if (!r) { toast('Resultado não encontrado','error'); return; }
+  await loadCache();
+  const prova = cache.provas.find(p => p.id === r.provaId);
+  const content = document.getElementById('app-content');
+  content.scrollTop = 0;
+  const cls = classNota(r.nota||0, r.notaMax||1);
+  const back = `abrirResultadosProva('${r.provaId}')`;
+
+  const detalhe = r.detalhe || {};
+  const nQ = prova?.numQuestoes || Object.keys(detalhe).length;
+
+  let acertos = 0, erros = 0, brancos = 0, anuladas = 0;
+  for (let q=1; q<=nQ; q++) {
+    const d = detalhe[q] || {};
+    if (d.status === 'anulada') anuladas++;
+    else if (d.status === 'correta') acertos++;
+    else if (d.status === 'branco' || !d.resp) brancos++;
+    else erros++;
+  }
+
+  let cells = '';
+  for (let q=1; q<=nQ; q++) {
+    const d = detalhe[q] || {};
+    const gabarito = prova?.gabarito?.[q];
+    let cellCls = 'bl';
+    if (d.status === 'anulada') cellCls = 'an';
+    else if (d.status === 'correta') cellCls = 'ok';
+    else if (d.status === 'errada') cellCls = 'bad';
+    const resp = d.resp && d.resp !== 'ANULADA' ? d.resp : '—';
+    const sub = d.status === 'errada' && gabarito ? `<div style="font-size:9px;color:var(--text-muted);margin-top:2px">✓ ${gabarito}</div>` : '';
+    cells += `<div class="res-q-cell ${cellCls}"><div class="q-num">${q}</div><div class="q-resp">${resp}</div>${sub}</div>`;
+  }
+
+  content.innerHTML = `
+    <div class="detail-header">
+      <div class="back-btn" onclick="${back}">‹</div>
+      <div class="detail-title">${escapeHtml(r.alunoNome||'Aluno')}</div>
+    </div>
+    <div style="padding:0 16px 8px">
+      <div style="font-size:13px;color:var(--text-muted)">${escapeHtml(r.provaNome||'')}</div>
+    </div>
+    <div class="res-summary">
+      <div class="stat-card"><div class="stat-label">Nota</div><div class="stat-value ${cls==='ok'?'cyan':cls==='warn'?'yellow':''}" ${cls==='fail'?'style="color:#e31b23"':''}>${fmtNota(r.nota||0)}</div></div>
+      <div class="stat-card"><div class="stat-label">de</div><div class="stat-value">${fmtNota(r.notaMax||0)}</div></div>
+      <div class="stat-card"><div class="stat-label">Acertos</div><div class="stat-value cyan">${acertos}</div></div>
+    </div>
+    <div style="padding:0 16px 8px;display:flex;gap:6px;flex-wrap:wrap">
+      <span class="badge badge-cyan">✓ ${acertos} acerto${acertos===1?'':'s'}</span>
+      <span class="badge" style="background:rgba(227,27,35,.15);color:#e31b23">✗ ${erros} erro${erros===1?'':'s'}</span>
+      ${brancos ? `<span class="badge" style="background:var(--surface2);color:var(--text-dim)">○ ${brancos} branco${brancos===1?'':'s'}</span>` : ''}
+      ${anuladas ? `<span class="badge badge-yellow">⊘ ${anuladas} anulada${anuladas===1?'':'s'}</span>` : ''}
+    </div>
+    <div class="dash-section-title">Respostas</div>
+    <div class="res-detalhe-grid">${cells}</div>
+    <div style="padding:0 16px 24px;display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="abrirBoletimAluno('${r.alunoId}')">Ver boletim do aluno</button>
+      <button class="btn btn-cyan" style="flex:1" onclick="iniciarCorrecao('${r.provaId}')">Corrigir outro</button>
+    </div>
+  `;
+}
+
+/* ─────────────────────────────────────────
+   TELA: BOLETIM INDIVIDUAL DO ALUNO
+───────────────────────────────────────── */
+async function abrirBoletimAluno(alunoId) {
+  await loadCache();
+  const aluno = (cache.alunos || []).find(a => a.id === alunoId);
+  if (!aluno) { toast('Aluno não encontrado','error'); return; }
+  const items = await loadResultados();
+  const meus = items.filter(r => r.alunoId === alunoId);
+
+  // Ordena por bimestre, depois por nome
+  meus.sort((a,b) => {
+    const bA = parseInt(a.bimestre||0) - parseInt(b.bimestre||0);
+    if (bA !== 0) return bA;
+    return (a.provaNome||'').localeCompare(b.provaNome||'', 'pt-BR');
+  });
+
+  // Calcula resumo
+  const totalNota = meus.reduce((s,r) => s + (r.nota||0), 0);
+  const totalMax  = meus.reduce((s,r) => s + (r.notaMax||0), 0);
+  const media = meus.length ? totalNota / meus.length : 0;
+  const aprov = meus.filter(r => r.notaMax && (r.nota/r.notaMax) >= 0.6).length;
+  const pct = meus.length ? Math.round((aprov / meus.length) * 100) : 0;
+
+  // Agrupa por bimestre
+  const porBim = {};
+  for (const r of meus) {
+    const k = r.bimestre || '—';
+    (porBim[k] = porBim[k] || []).push(r);
+  }
+  const bims = Object.keys(porBim).sort();
+
+  const content = document.getElementById('app-content');
+  content.scrollTop = 0;
+  const turmaNome = turmaNomeById(aluno.turmaId);
+  const avatarHtml = `<div class="aluno-avatar" style="width:64px;height:64px;font-size:22px;border-radius:32px">${escapeHtml(initials(aluno.nome))}</div>`;
+
+  let secoes = '';
+  if (!meus.length) {
+    secoes = `
+      <div class="empty-state">
+        <div class="empty-icon">📋</div>
+        <div class="empty-title">Sem correções</div>
+        <div class="empty-sub">Este aluno ainda não tem provas corrigidas.</div>
+      </div>`;
+  } else {
+    for (const b of bims) {
+      const provas = porBim[b];
+      secoes += `<div class="dash-section-title">${b !== '—' ? b+'ª unidade' : 'Sem unidade'}</div>`;
+      secoes += '<div style="padding:0 16px 8px">';
+      for (const r of provas) {
+        const cls = classNota(r.nota||0, r.notaMax||1);
+        secoes += `
+          <div class="bol-prova-row" onclick="abrirDetalheResultado('${r.id}')">
+            <div>
+              <div class="bol-prova-nome">${escapeHtml(r.provaNome||'(sem nome)')}</div>
+              <div class="bol-prova-meta">${escapeHtml(r.disciplina||'')} ${r.notaMax ? '· '+fmtNota(r.nota)+' de '+fmtNota(r.notaMax) : ''}</div>
+            </div>
+            <div class="bol-prova-nota ${cls}" style="color:${cls==='ok'?'var(--cyan)':cls==='warn'?'#fdb913':'#e31b23'}">${fmtNota(r.nota||0)}</div>
+          </div>`;
+      }
+      secoes += '</div>';
+    }
+  }
+
+  content.innerHTML = `
+    <div class="detail-header">
+      <div class="back-btn" onclick="navTo('alunos')">‹</div>
+      <div class="detail-title">Boletim</div>
+    </div>
+    <div style="padding:0 16px 16px;display:flex;align-items:center;gap:14px">
+      ${avatarHtml}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:17px;font-weight:700;color:var(--text)">${escapeHtml(aluno.nome)}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${escapeHtml(turmaNome)}${aluno.matricula?' · Mat. '+escapeHtml(aluno.matricula):''}</div>
+      </div>
+    </div>
+    <div class="res-summary">
+      <div class="stat-card"><div class="stat-label">Provas</div><div class="stat-value cyan">${meus.length}</div></div>
+      <div class="stat-card"><div class="stat-label">Média</div><div class="stat-value">${meus.length ? fmtNota(media) : '—'}</div></div>
+      <div class="stat-card"><div class="stat-label">Aprovação</div><div class="stat-value yellow">${meus.length ? pct+'%' : '—'}</div></div>
+    </div>
+    ${secoes}
+  `;
+}
+
+/* ─────────────────────────────────────────
+   HOOK: invalida cacheRes ao salvar correção
+───────────────────────────────────────── */
+(function patchSalvarResultado(){
+  // Tenta agrupar com a função existente; se não disponível, nada acontece.
+  const tryPatch = () => {
+    if (typeof executarSalvar === 'function' && !executarSalvar._patched) {
+      const orig = executarSalvar;
+      executarSalvar = async function(...args) {
+        const r = await orig.apply(this, args);
+        cacheRes.items = null;
+        return r;
+      };
+      executarSalvar._patched = true;
+    }
+  };
+  // Tenta logo e também depois do load
+  tryPatch();
+  setTimeout(tryPatch, 500);
+  setTimeout(tryPatch, 2000);
+})();
+
+/* ─────────────────────────────────────────
+   HOOK: invalida cacheRes na troca de escola
+───────────────────────────────────────── */
+(function patchSignOutForRes(){
+  if (typeof signOut === 'function') {
+    const _orig = signOut;
+    signOut = async function() {
+      cacheRes.items = null;
+      return _orig();
+    };
+  }
+})();
+</script>
+
 </body>
 </html>
