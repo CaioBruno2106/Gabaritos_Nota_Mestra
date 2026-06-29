@@ -2647,6 +2647,8 @@ function navTo(view) {
 
   const views = { inicio, provas, turmas, alunos, mais };
   if (views[view]) content.innerHTML = views[view]();
+
+  if (view === 'inicio') setTimeout(loadDashStats, 100);
 }
 
 /* ══════════════
@@ -2853,12 +2855,7 @@ async function loadDashStats() {
   } catch { /* Coleções ainda não existem — normal no início */ }
 }
 
-// Observa mudanças de view para carregar stats
-const _originalNavTo = navTo;
-function navTo(view) {
-  _originalNavTo(view);
-  if (view === 'inicio') setTimeout(loadDashStats, 100);
-}
+// loadDashStats já é chamado dentro do navTo original acima
 
 /* ═══════════════════════════════════════════
    GRADE DE BOLHAS (elemento assinatura do login)
