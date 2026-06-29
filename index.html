@@ -2875,90 +2875,141 @@ function buildBubbleGrid() {
   }
 }
 </script>
-</body>
-</html>
 
 <script>
 /* ═══════════════════════════════════════════════════════════════
-   ETAPA 3 — GERAÇÃO DE CARTÃO-RESPOSTA (A5, PNG + PDF)
-   Layout: apenas grade de bolhas + marcadores fiduciais + QR code
-   Sem cabeçalho — para encaixe no modelo de folha da escola
+   ETAPA 3 — GERAÇÃO DE CARTÃO-RESPOSTA
+   Saída: grade de bolhas + marcadores fiduciais + QR code
+   Sem cabeçalho — para encaixe no modelo da escola
+   Formatos: PNG (300 DPI) e PDF A5/A5-paisagem
 ═══════════════════════════════════════════════════════════════ */
 
-// Constantes de layout (reutilizadas pelo OpenCV na Etapa 4)
 const CARTAO = {
-  DPI:            300,
-  W_MM:           148,   // A5 largura
-  H_MM:           210,   // A5 altura
-  FM_SIZE_MM:     12,    // Tamanho do marcador fiducial
-  FM_PAD_MM:       5,    // Distância do fiducial à borda
-  QR_SIZE_MM:     22,    // Tamanho do QR code
-  QR_RESERVE_MM:  32,    // Espaço reservado na base para o QR
-  GRID_TOP_MM:    22,    // Margem superior da grade (após fiduciais)
-  GRID_LEFT_MM:   18,    // Margem lateral da grade
+  DPI:         300,
+  FM_SIZE_MM:  12,    // tamanho do marcador fiducial
+  FM_PAD_MM:    5,    // distância do fiducial à borda
+  QR_SIZE_MM:  20,    // tamanho do QR code
+  QR_GAP_MM:    5,    // espaço entre grade e QR
+  MARGIN_MM:   20,    // margem geral (após fiduciais)
+  MAX_BUBBLE:   7,    // bolha máxima em mm
+  MIN_BUBBLE:   2.8,  // bolha mínima em mm
+  MAX_BSPACING: 9,    // espaçamento máximo bolha-a-bolha
 };
 
-function px(mm) {
-  return Math.round(mm * CARTAO.DPI / 25.4);
-}
+function px(mm) { return Math.round(mm * CARTAO.DPI / 25.4); }
 
-/* ── Cálculo dinâmico de layout ── */
+/* ─────────────────────────────────────────────────
+   ALGORITMO DE LAYOUT
+   Prioridade: portrait → landscape
+   Preenche a altura disponível escalando rowH
+───────────────────────────────────────────────── */
 function calcLayout(nQ, nA) {
-  const availW = CARTAO.W_MM - CARTAO.GRID_LEFT_MM * 2;          // ~112mm
-  const availH = CARTAO.H_MM - CARTAO.GRID_TOP_MM - 10 - CARTAO.QR_RESERVE_MM; // ~136mm
+  const colGap = 3; // mm entre colunas
 
-  // Tenta tamanhos de bolha do maior para o menor
-  const bubbleSizes = [5, 4.5, 4, 3.5, 3];
+  for (const isLandscape of [false, true]) {
+    const W = isLandscape ? 210 : 148;
+    const H = isLandscape ? 148 : 210;
 
-  for (const bD of bubbleSizes) {
-    const bSpacing = bD + 1.2;   // espaçamento centro-a-centro
-    const numW     = 6.5;         // largura da coluna de numeração
-    const colPad   = 2;           // padding interno da coluna
-    const colW     = numW + nA * bSpacing + colPad;
-    const rowH     = bD + 2.2;
+    // Área útil da grade
+    const availW = W - CARTAO.MARGIN_MM * 2;          // mm disponível na largura
+    const availH = H - CARTAO.MARGIN_MM * 2
+                     - CARTAO.QR_SIZE_MM
+                     - CARTAO.QR_GAP_MM;              // mm disponível na altura (reserva QR na base)
 
-    for (let nCols = 2; nCols <= 5; nCols++) {
-      const colGap   = 3;
-      const totalW   = nCols * colW + (nCols - 1) * colGap;
-      if (totalW > availW) continue;
+    for (let nCols = 1; nCols <= 6; nCols++) {
+      const rowsPerCol = Math.ceil(nQ / nCols);
 
-      const rowsPerCol = Math.floor(availH / rowH);
-      if (rowsPerCol * nCols >= nQ) {
-        return { nCols, colGap, colW, numW, bD, bSpacing, rowH, rowsPerCol };
-      }
+      // rowH preenche toda a altura disponível
+      const rowH = availH / rowsPerCol;
+      if (rowH < CARTAO.MIN_BUBBLE + 1.5) continue;   // muito comprimido
+
+      // Largura de cada coluna com base no espaço disponível
+      const maxColW = (availW - (nCols - 1) * colGap) / nCols;
+
+      // numW proporcional ao tamanho da linha
+      const numW = Math.min(7, Math.max(5, rowH * 0.38));
+
+      // bSpacing derivado da largura disponível, mas limitado
+      const bSpacing = Math.min(
+        CARTAO.MAX_BSPACING,
+        (maxColW - numW - 2) / nA
+      );
+
+      // bubbleD derivado do espaçamento, não pode exceder rowH nem MAX_BUBBLE
+      const bubbleD = Math.min(
+        CARTAO.MAX_BUBBLE,
+        Math.min(rowH - 1.5, bSpacing - 0.8)
+      );
+
+      if (bubbleD < CARTAO.MIN_BUBBLE) continue;      // bolha muito pequena
+
+      // colW real (pode ser menor que maxColW quando bSpacing foi limitado)
+      const colW = numW + nA * bSpacing + 2;
+      const totalW = nCols * colW + (nCols - 1) * colGap;
+      if (totalW > availW + 0.5) continue;             // não cabe na largura
+
+      // Grade horizontalmente centralizada
+      const offsetX = (availW - totalW) / 2;
+
+      return {
+        isLandscape, W, H,
+        nCols, colGap, colW, numW,
+        bubbleD, bSpacing,
+        rowH, rowsPerCol,
+        availW, availH, offsetX,
+      };
     }
   }
 
-  // Fallback máximo (5 colunas, bolha mínima)
-  const bD = 3, bSpacing = 4.2, numW = 5.5, colPad = 1;
-  const colW  = numW + nA * bSpacing + colPad;
-  const rowH  = 5.2;
+  // Fallback absoluto (landscape 5 colunas mínimas)
+  const W = 210, H = 148;
+  const availW = W - 40, availH = H - 40 - CARTAO.QR_SIZE_MM - CARTAO.QR_GAP_MM;
   const nCols = 5;
-  return { nCols, colGap: 2, colW, numW, bD, bSpacing, rowH, rowsPerCol: Math.floor(availH / rowH) };
+  const rowsPerCol = Math.ceil(nQ / nCols);
+  const rowH = Math.max(CARTAO.MIN_BUBBLE + 1.5, availH / rowsPerCol);
+  const colW = (availW - 4 * colGap) / nCols;
+  const numW = 5;
+  const bSpacing = (colW - numW - 2) / nA;
+  const bubbleD = Math.max(CARTAO.MIN_BUBBLE, bSpacing - 0.8);
+  return {
+    isLandscape: true, W, H,
+    nCols, colGap, colW, numW,
+    bubbleD, bSpacing,
+    rowH, rowsPerCol,
+    availW, availH, offsetX: 0,
+  };
 }
 
-/* ── Marcadores fiduciais ── */
+/* ─────────────────────────────────────────────────
+   MARCADORES FIDUCIAIS
+   Quadrado preto com ponto branco interno
+   (padrão reconhecido pelo OpenCV na Etapa 4)
+───────────────────────────────────────────────── */
 function drawFiduciais(ctx, W, H) {
   const size = px(CARTAO.FM_SIZE_MM);
   const pad  = px(CARTAO.FM_PAD_MM);
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(pad,         pad,         size, size);  // TL
-  ctx.fillRect(W-pad-size,  pad,         size, size);  // TR
-  ctx.fillRect(pad,         H-pad-size,  size, size);  // BL
-  ctx.fillRect(W-pad-size,  H-pad-size,  size, size);  // BR
-
-  // Marcador interno branco (âncora visual para o OpenCV)
-  const inner = Math.round(size * 0.38);
+  const inner = Math.round(size * 0.36);
   const off   = Math.round((size - inner) / 2);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(pad        + off, pad        + off, inner, inner);
-  ctx.fillRect(W-pad-size + off, pad        + off, inner, inner);
-  ctx.fillRect(pad        + off, H-pad-size + off, inner, inner);
-  ctx.fillRect(W-pad-size + off, H-pad-size + off, inner, inner);
+
+  const corners = [
+    [pad,         pad        ],   // TL
+    [W-pad-size,  pad        ],   // TR
+    [pad,         H-pad-size ],   // BL
+    [W-pad-size,  H-pad-size ],   // BR
+  ];
+
+  corners.forEach(([x, y]) => {
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(x, y, size, size);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x + off, y + off, inner, inner);
+  });
 }
 
-/* ── QR Code ── */
-async function drawQR(ctx, W, H, provaId) {
+/* ─────────────────────────────────────────────────
+   QR CODE — posicionado logo abaixo da grade
+───────────────────────────────────────────────── */
+async function drawQR(ctx, W, H, L, provaId) {
   return new Promise((resolve, reject) => {
     try {
       const qr = qrcode(0, 'M');
@@ -2971,119 +3022,130 @@ async function drawQR(ctx, W, H, provaId) {
 
       const img = new Image();
       img.onload = () => {
-        const qrX = Math.round((W - qrSizePx) / 2);
-        const qrY = H - px(CARTAO.FM_PAD_MM) - px(CARTAO.FM_SIZE_MM) - px(4) - qrSizePx;
+        // QR logo abaixo da grade (grade termina em MARGIN + availH)
+        const gridBottomY = px(CARTAO.MARGIN_MM) + px(L.availH);
+        const qrX = Math.round((px(W) - qrSizePx) / 2);
+        const qrY = gridBottomY + px(CARTAO.QR_GAP_MM);
 
         // Fundo branco ao redor do QR
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(qrX - px(2), qrY - px(2), qrSizePx + px(4), qrSizePx + px(4));
+        ctx.fillRect(qrX - px(2), qrY - px(2), qrSizePx + px(4), qrSizePx + px(6) + px(3));
 
         ctx.drawImage(img, qrX, qrY, qrSizePx, qrSizePx);
 
-        // ID abreviado abaixo do QR
-        ctx.fillStyle = '#777777';
-        ctx.font      = `${px(2.2)}px Arial`;
-        ctx.textAlign = 'center';
+        // ID abaixo do QR
+        ctx.fillStyle    = '#888888';
+        ctx.font         = `${px(2)}px Arial`;
+        ctx.textAlign    = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText(provaId.slice(0, 12).toUpperCase(), W / 2, qrY + qrSizePx + px(1.5));
+        ctx.fillText(provaId.slice(0, 14).toUpperCase(), px(W) / 2, qrY + qrSizePx + px(1.5));
         resolve();
       };
-      img.onerror = () => reject(new Error('Falha ao gerar QR code'));
+      img.onerror = () => reject(new Error('Erro ao gerar QR'));
       img.src = dataUrl;
     } catch (e) { reject(e); }
   });
 }
 
-/* ── Grade de bolhas ── */
-function drawGrade(ctx, prova) {
-  const nQ    = prova.numQuestoes;
-  const nA    = prova.numAlternativas || 5;
+/* ─────────────────────────────────────────────────
+   GRADE DE BOLHAS
+───────────────────────────────────────────────── */
+function drawGrade(ctx, W, prova, L) {
+  const nQ     = prova.numQuestoes;
+  const nA     = prova.numAlternativas || 5;
   const letras = 'ABCDE'.slice(0, nA).split('');
-  const L     = calcLayout(nQ, nA);
 
-  const startX    = px(CARTAO.GRID_LEFT_MM);
-  const startY    = px(CARTAO.GRID_TOP_MM);
-  const colWpx    = px(L.colW);
-  const colGappx  = px(L.colGap);
-  const numWpx    = px(L.numW);
-  const bDpx      = px(L.bD);
-  const bRpx      = bDpx / 2;
-  const bSppx     = px(L.bSpacing);
-  const rowHpx    = px(L.rowH);
+  const startX  = px(CARTAO.MARGIN_MM) + px(L.offsetX);
+  const startY  = px(CARTAO.MARGIN_MM);
+  const colWpx  = px(L.colW);
+  const colGppx = px(L.colGap);
+  const numWpx  = px(L.numW);
+  const bDpx    = px(L.bubbleD);
+  const bRpx    = bDpx / 2;
+  const bSppx   = px(L.bSpacing);
+  const rowHpx  = px(L.rowH);
 
-  const fNum  = `${px(Math.min(3, L.bD * 0.62))}px Arial`;
-  const fLet  = `bold ${px(Math.min(2.6, L.bD * 0.55))}px Arial`;
+  const fNum = `${px(Math.min(3.2, L.bubbleD * 0.58))}px Arial`;
+  const fLet = `bold ${px(Math.min(2.8, L.bubbleD * 0.5))}px Arial`;
 
-  // Cabeçalho de letras por coluna
   for (let col = 0; col < L.nCols; col++) {
-    const colX = startX + col * (colWpx + colGappx);
-    ctx.fillStyle   = '#333333';
-    ctx.font        = fLet;
-    ctx.textAlign   = 'center';
+    const colX   = startX + col * (colWpx + colGppx);
+    const qCount = Math.min(L.rowsPerCol, nQ - col * L.rowsPerCol);
+    if (qCount <= 0) continue;                         // coluna sem questões
+
+    // Cabeçalho de letras
+    ctx.fillStyle    = '#333333';
+    ctx.font         = fLet;
+    ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
     for (let a = 0; a < nA; a++) {
       ctx.fillText(letras[a], colX + numWpx + a * bSppx + bRpx, startY - px(4));
     }
-  }
 
-  // Linha separadora de cabeçalho
-  ctx.strokeStyle = '#cccccc';
-  ctx.lineWidth   = px(0.25);
-  ctx.beginPath();
-  ctx.moveTo(startX, startY - px(1.5));
-  ctx.lineTo(startX + L.nCols * colWpx + (L.nCols - 1) * colGappx, startY - px(1.5));
-  ctx.stroke();
-
-  // Linhas divisórias entre colunas
-  for (let col = 1; col < L.nCols; col++) {
-    const lx = startX + col * (colWpx + colGappx) - colGappx / 2;
-    const gridH = Math.min(L.rowsPerCol, nQ) * rowHpx;
-    ctx.strokeStyle = '#e0e0e0';
-    ctx.lineWidth   = px(0.2);
+    // Linha divisória abaixo do cabeçalho
+    ctx.strokeStyle = '#bbbbbb';
+    ctx.lineWidth   = px(0.25);
     ctx.beginPath();
-    ctx.moveTo(lx, startY - px(6));
-    ctx.lineTo(lx, startY + gridH);
+    ctx.moveTo(colX,          startY - px(1.5));
+    ctx.lineTo(colX + colWpx, startY - px(1.5));
     ctx.stroke();
-  }
 
-  // Questões
-  for (let q = 1; q <= nQ; q++) {
-    const col = Math.floor((q - 1) / L.rowsPerCol);
-    const row = (q - 1) % L.rowsPerCol;
-    if (col >= L.nCols) break;
+    // Questões desta coluna
+    for (let row = 0; row < qCount; row++) {
+      const q    = col * L.rowsPerCol + row + 1;
+      const rowY = startY + row * rowHpx;
+      const cy   = rowY + rowHpx / 2;                 // centro vertical da linha
 
-    const colX = startX + col * (colWpx + colGappx);
-    const rowY = startY + row * rowHpx + rowHpx / 2;
+      // Fundo alternado
+      if (row % 2 === 0) {
+        ctx.fillStyle = '#f5f5f5';
+        ctx.fillRect(colX, rowY, colWpx, rowHpx);
+      }
 
-    // Fundo alternado (facilita leitura)
-    if (row % 2 === 0) {
-      ctx.fillStyle = '#f7f7f7';
-      ctx.fillRect(colX, startY + row * rowHpx, colWpx, rowHpx);
-    }
+      // Número da questão
+      ctx.fillStyle    = '#111111';
+      ctx.font         = fNum;
+      ctx.textAlign    = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(q, colX + numWpx - px(0.8), cy);
 
-    // Número da questão
-    ctx.fillStyle    = '#111111';
-    ctx.font         = fNum;
-    ctx.textAlign    = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(q.toString(), colX + numWpx - px(0.8), rowY);
-
-    // Bolhas
-    for (let a = 0; a < nA; a++) {
-      const bx = colX + numWpx + a * bSppx + bRpx;
-      ctx.beginPath();
-      ctx.arc(bx, rowY, bRpx - px(0.2), 0, Math.PI * 2);
+      // Bolhas
       ctx.strokeStyle = '#000000';
       ctx.lineWidth   = px(0.22);
+      for (let a = 0; a < nA; a++) {
+        const bx = colX + numWpx + a * bSppx + bRpx;
+        ctx.beginPath();
+        ctx.arc(bx, cy, bRpx - px(0.15), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Linhas verticais separando colunas
+  if (L.nCols > 1) {
+    ctx.strokeStyle = '#dddddd';
+    ctx.lineWidth   = px(0.2);
+    const gridH = px(L.rowsPerCol * L.rowH);
+    for (let col = 1; col < L.nCols; col++) {
+      const lx = startX + col * (colWpx + colGppx) - px(L.colGap / 2);
+      ctx.beginPath();
+      ctx.moveTo(lx, startY - px(6));
+      ctx.lineTo(lx, startY + gridH);
       ctx.stroke();
     }
   }
 }
 
-/* ── Canvas principal A5 @ 300 DPI ── */
+/* ─────────────────────────────────────────────────
+   CANVAS PRINCIPAL
+───────────────────────────────────────────────── */
 async function buildCartaoCanvas(prova) {
-  const W = px(CARTAO.W_MM);
-  const H = px(CARTAO.H_MM);
+  const nQ = prova.numQuestoes;
+  const nA = prova.numAlternativas || 5;
+  const L  = calcLayout(nQ, nA);
+
+  const W = px(L.W);
+  const H = px(L.H);
 
   const canvas = document.createElement('canvas');
   canvas.width  = W;
@@ -3094,81 +3156,80 @@ async function buildCartaoCanvas(prova) {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, W, H);
 
-  // Borda fina de referência (ajuda impressão)
-  ctx.strokeStyle = '#dddddd';
+  // Borda de referência (ajuda no corte/impressão)
+  ctx.strokeStyle = '#cccccc';
   ctx.lineWidth   = px(0.3);
-  ctx.strokeRect(px(0.8), px(0.8), W - px(1.6), H - px(1.6));
+  ctx.strokeRect(px(1), px(1), W - px(2), H - px(2));
 
   drawFiduciais(ctx, W, H);
-  await drawQR(ctx, W, H, prova.id);
-  drawGrade(ctx, prova);
+  drawGrade(ctx, W, prova, L);
+  await drawQR(ctx, W, H, L, prova.id);
 
-  return canvas;
+  return { canvas, isLandscape: L.isLandscape };
 }
 
-/* ── Modal de geração ── */
+/* ─────────────────────────────────────────────────
+   MODAL DE GERAÇÃO
+───────────────────────────────────────────────── */
 async function gerarCartao(provaId) {
   await loadCache();
   const prova = cache.provas.find(p => p.id === provaId);
   if (!prova) { toast('Prova não encontrada', 'error'); return; }
 
-  // Loading
+  const nQ = prova.numQuestoes;
+  const isLandscape = calcLayout(nQ, prova.numAlternativas || 5).isLandscape;
+  const orientLabel = isLandscape ? 'A5 paisagem' : 'A5 retrato';
+
   showModal(`
     <div class="modal-handle"></div>
     <div class="modal-title">Gerando cartão...</div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:24px 0">
       <div class="spinner" style="width:36px;height:36px;border-width:3px;color:var(--cyan)"></div>
-      <div style="font-size:13px;color:var(--text-muted)">Renderizando ${prova.numQuestoes} questões em 300 DPI...</div>
+      <div style="font-size:13px;color:var(--text-muted)">
+        ${nQ} questões · ${orientLabel} · 300 DPI
+      </div>
     </div>
   `);
-
   await new Promise(r => setTimeout(r, 80));
 
   try {
-    const canvas = await buildCartaoCanvas(prova);
+    const { canvas, isLandscape: land } = await buildCartaoCanvas(prova);
 
-    // Preview escalado para caber na tela
-    const previewW  = Math.min(window.innerWidth - 64, 340);
-    const previewH  = Math.round(previewW * CARTAO.H_MM / CARTAO.W_MM);
-    const previewC  = document.createElement('canvas');
+    // Preview escalado (max 320px de largura)
+    const previewW = Math.min(window.innerWidth - 64, 320);
+    const previewH = Math.round(previewW * canvas.height / canvas.width);
+    const previewC = document.createElement('canvas');
     previewC.width  = previewW;
     previewC.height = previewH;
     previewC.getContext('2d').drawImage(canvas, 0, 0, previewW, previewH);
 
-    // Salva referências globais para os botões de download
-    window._cartaoCanvas = canvas;
-    window._cartaoProva  = prova;
+    window._cartaoCanvas     = canvas;
+    window._cartaoProva      = prova;
+    window._cartaoLandscape  = land;
 
     closeModal();
     showModal(`
       <div class="modal-handle"></div>
       <div class="modal-title">Cartão-resposta</div>
       <div style="font-size:12px;color:var(--text-muted);margin-top:-8px">
-        ${prova.numQuestoes} questões · A–${'ABCDE'[(prova.numAlternativas||5)-1]} · A5 · 300 DPI
+        ${nQ} questões · A–${'ABCDE'[(prova.numAlternativas||5)-1]} · ${land ? 'A5 paisagem' : 'A5 retrato'} · 300 DPI
       </div>
 
-      <div style="background:#fff;border-radius:10px;padding:8px;text-align:center;border:1px solid #e0e0e0">
-        <canvas id="cartao-preview"
-          width="${previewW}" height="${previewH}"
-          style="max-width:100%;height:auto;display:block;margin:0 auto">
+      <div style="background:#f0f0f0;border-radius:10px;padding:8px;text-align:center">
+        <canvas id="cartao-preview" width="${previewW}" height="${previewH}"
+          style="max-width:100%;height:auto;display:block;margin:0 auto;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.2)">
         </canvas>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <button class="btn btn-cyan" onclick="downloadPNG()">
-          ⬇ PNG
-        </button>
-        <button class="btn btn-primary" onclick="downloadPDF()">
-          ⬇ PDF A5
-        </button>
+        <button class="btn btn-cyan" onclick="downloadPNG()">⬇ PNG</button>
+        <button class="btn btn-primary" onclick="downloadPDF()">⬇ PDF</button>
       </div>
       <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
     `);
 
-    // Renderiza preview
     document.getElementById('cartao-preview')
-      .getContext('2d')
-      .drawImage(previewC, 0, 0);
+      .getContext('2d').drawImage(previewC, 0, 0);
 
   } catch (e) {
     closeModal();
@@ -3177,29 +3238,35 @@ async function gerarCartao(provaId) {
   }
 }
 
-/* ── Downloads ── */
+/* ─────────────────────────────────────────────────
+   DOWNLOADS
+───────────────────────────────────────────────── */
 function downloadPNG() {
   const canvas = window._cartaoCanvas;
   const prova  = window._cartaoProva;
   if (!canvas) return;
   const slug = (prova.nome || 'cartao').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  const link = document.createElement('a');
-  link.download = `cartao_${slug}.png`;
-  link.href = canvas.toDataURL('image/png', 1.0);
-  link.click();
+  const a = document.createElement('a');
+  a.download = `cartao_${slug}.png`;
+  a.href = canvas.toDataURL('image/png', 1.0);
+  a.click();
   toast('PNG salvo!', 'success');
 }
 
 function downloadPDF() {
   const canvas = window._cartaoCanvas;
   const prova  = window._cartaoProva;
+  const land   = window._cartaoLandscape;
   if (!canvas || !window.jspdf) { toast('jsPDF não carregado', 'error'); return; }
   const { jsPDF } = window.jspdf;
-  const pdf     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
-  const imgData = canvas.toDataURL('image/png', 1.0);
-  pdf.addImage(imgData, 'PNG', 0, 0, 148, 210);
+  const orientation = land ? 'landscape' : 'portrait';
+  const pdf = new jsPDF({ orientation, unit: 'mm', format: 'a5' });
+  const [pW, pH] = land ? [210, 148] : [148, 210];
+  pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, pW, pH);
   const slug = (prova.nome || 'cartao').replace(/[^a-z0-9]/gi, '_').toLowerCase();
   pdf.save(`cartao_${slug}.pdf`);
-  toast('PDF A5 salvo!', 'success');
+  toast('PDF salvo!', 'success');
 }
 </script>
+</body>
+</html>
