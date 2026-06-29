@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
 <title>Leitor de Gabaritos</title>
-<!-- build: v5 (Etapa 5 — Resultados e Boletim) -->
+<!-- build: v6 (Etapa 6 — Relatório Pedagógico) -->
 
 <!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -921,6 +921,14 @@ async function abrirProva(id) {
         <div class="quick-action-text">
           <div class="quick-action-title">Ver resultados</div>
           <div class="quick-action-sub">Notas e correções dos alunos</div>
+        </div>
+        <div class="quick-action-arrow">›</div>
+      </div>
+      <div class="quick-action" onclick="abrirRelatorio('${p.id}')">
+        <div class="quick-action-icon" style="background:rgba(138,43,226,0.18)">📈</div>
+        <div class="quick-action-text">
+          <div class="quick-action-title">Relatório pedagógico</div>
+          <div class="quick-action-sub">Análise por questão, ranking e distribuição</div>
         </div>
         <div class="quick-action-arrow">›</div>
       </div>
@@ -2506,7 +2514,16 @@ window.onGoogleIdToken = async (idToken) => {
 };
 
 async function signOut() {
-  await auth.signOut();
+  try {
+    await auth.signOut();
+  } finally {
+    // Restaura o botão do Google após o logout (seja bem ou mal-sucedido)
+    const btn = document.getElementById('btn-google-login');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Continuar com Google`;
+    }
+  }
 }
 
 /* ═══════════════════════════════════════════
@@ -2942,7 +2959,7 @@ function mais() {
   </div>
 
   <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:11px;">
-    Leitor de Gabaritos v4.1 · Etapa 4.1
+    Leitor de Gabaritos v6 · Etapa 6
   </div>`;
 }
 
@@ -5490,6 +5507,398 @@ async function abrirBoletimAluno(alunoId) {
     };
   }
 })();
+</script>
+
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+<style>
+/* ═══════════════════════════════════════════════════════
+   ETAPA 6 — RELATÓRIO PEDAGÓGICO
+═══════════════════════════════════════════════════════ */
+.rel-tabs {
+  display: flex; gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin: 0 16px 16px; overflow-x: auto;
+}
+.rel-tab {
+  flex-shrink: 0; padding: 10px 16px;
+  font-size: 13px; font-weight: 600; color: var(--text-muted);
+  border-bottom: 2px solid transparent; cursor: pointer;
+  transition: all .15s; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.rel-tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+.rel-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); margin: 0 16px 12px; padding: 14px 16px;
+}
+.rel-card-title {
+  font-size: 12px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px;
+}
+.rel-resumo-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+  margin: 0 16px 12px;
+}
+.rel-resumo-cell {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 10px 12px;
+}
+.rel-resumo-cell .rv { font-size: 22px; font-weight: 700; font-family: var(--mono); color: var(--cyan); }
+.rel-resumo-cell .rl { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.rel-resumo-cell.warn .rv { color: #fdb913; }
+.rel-resumo-cell.fail .rv { color: #e31b23; }
+.rel-resumo-cell.ok   .rv { color: var(--cyan); }
+
+/* Questão destaque */
+.rel-q-destaque {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--r-sm);
+  margin-bottom: 6px; font-size: 13px;
+}
+.rel-q-destaque.low  { background: rgba(230,57,70,.12);  border-left: 3px solid #e31b23; }
+.rel-q-destaque.mid  { background: rgba(253,185,19,.12); border-left: 3px solid #fdb913; }
+.rel-q-destaque.high { background: rgba(0,180,216,.10);  border-left: 3px solid var(--cyan); }
+.rel-q-num  { font-weight: 700; font-family: var(--mono); min-width: 28px; }
+.rel-q-pct  { margin-left: auto; font-weight: 700; font-family: var(--mono); }
+.rel-q-bar-wrap { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; }
+.rel-q-bar  { height: 100%; border-radius: 3px; transition: width .4s; }
+
+/* Ranking */
+.rel-rank-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border2);
+  font-size: 13px;
+}
+.rel-rank-row:last-child { border-bottom: none; }
+.rel-rank-pos  { font-family: var(--mono); font-weight: 700; min-width: 26px; color: var(--text-muted); }
+.rel-rank-nome { flex: 1; font-weight: 600; }
+.rel-rank-nota { font-family: var(--mono); font-weight: 700; min-width: 48px; text-align: right; }
+
+/* Distratores */
+.rel-dist-row   { padding: 6px 0; border-bottom: 1px solid var(--border2); }
+.rel-dist-row:last-child { border-bottom: none; }
+.rel-dist-head  { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+.rel-dist-bars  { display: flex; gap: 3px; }
+.rel-dist-alt   { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.rel-dist-bar-wrap { width: 100%; height: 32px; display: flex; align-items: flex-end; }
+.rel-dist-bar-inner { width: 100%; background: var(--surface2); border-radius: 3px 3px 0 0; min-height: 2px; transition: height .4s; }
+.rel-dist-alt.correta .rel-dist-bar-inner { background: var(--cyan); }
+.rel-dist-alt.erro .rel-dist-bar-inner    { background: #e31b23; }
+.rel-dist-label { font-size: 10px; font-weight: 700; color: var(--text-muted); }
+.rel-dist-label.correta { color: var(--cyan); }
+.rel-dist-label.erro    { color: #e31b23; }
+
+/* Abas de seção dentro do relatório */
+.rel-section-sep {
+  height: 1px; background: var(--border); margin: 8px 16px 16px;
+}
+</style>
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   ETAPA 6 — RELATÓRIO PEDAGÓGICO
+════════════════════════════════════════════════════════════════ */
+
+/* Estado do relatório */
+const _rel = { provaId: null, prova: null, resultados: [], abaAtiva: 'questoes', chartInstances: [] };
+
+/* ─── Destrói todos os charts Chart.js ativos para evitar memory leak ─── */
+function relDestroyCharts() {
+  _rel.chartInstances.forEach(c => { try { c.destroy(); } catch(_) {} });
+  _rel.chartInstances = [];
+}
+
+/* ─── Abre tela do relatório ─── */
+async function abrirRelatorio(provaId) {
+  await loadCache();
+  const p = cache.provas.find(x => x.id === provaId);
+  if (!p) { toast('Prova não encontrada', 'error'); return; }
+
+  const content = document.getElementById('app-content');
+  content.scrollTop = 0;
+  content.innerHTML = `
+    <div class="detail-header">
+      <div class="back-btn" onclick="relDestroyCharts(); abrirProva('${p.id}')">‹</div>
+      <div class="detail-title">Relatório</div>
+    </div>
+    <div style="padding:0 16px 4px">
+      <div style="font-size:13px;color:var(--text-muted)">${escapeHtml(p.nome)}</div>
+    </div>
+    <div id="rel-loading" style="display:flex;justify-content:center;padding:40px 0">
+      <div class="spinner" style="width:32px;height:32px;border-width:3px;color:var(--cyan)"></div>
+    </div>
+    <div id="rel-body" class="hidden"></div>
+  `;
+
+  _rel.provaId = provaId;
+  _rel.prova   = p;
+  _rel.abaAtiva = 'questoes';
+
+  // Carrega resultados
+  const todos = await loadResultados();
+  _rel.resultados = todos.filter(r => r.provaId === provaId);
+
+  document.getElementById('rel-loading').style.display = 'none';
+  const body = document.getElementById('rel-body');
+  body.classList.remove('hidden');
+
+  relRender(body);
+}
+
+/* ─── Render principal ─── */
+function relRender(bodyEl) {
+  if (!bodyEl) bodyEl = document.getElementById('rel-body');
+  if (!bodyEl) return;
+  relDestroyCharts();
+
+  const p   = _rel.prova;
+  const res = _rel.resultados;
+  const nQ  = p.numQuestoes;
+  const nA  = p.numAlternativas || 5;
+  const letras = 'ABCDE'.slice(0, nA).split('');
+
+  // ── Computar estatísticas ──
+  const total = res.length;
+
+  // Por questão: contagem de cada alternativa
+  const contAlt = {}; // q → { A:0, B:0, ... }
+  for (let q = 1; q <= nQ; q++) {
+    contAlt[q] = {};
+    letras.forEach(l => contAlt[q][l] = 0);
+    contAlt[q]['branco'] = 0;
+  }
+  for (const r of res) {
+    for (let q = 1; q <= nQ; q++) {
+      const resp = r.respostas?.[q];
+      if (!resp || resp === 'ANULADA') contAlt[q]['branco']++;
+      else if (contAlt[q][resp] !== undefined) contAlt[q][resp]++;
+    }
+  }
+
+  // % acerto por questão
+  const pctAcerto = {}; // q → 0..100
+  for (let q = 1; q <= nQ; q++) {
+    if (p.anuladas?.[q]) { pctAcerto[q] = 100; continue; }
+    const gab = p.gabarito?.[q];
+    pctAcerto[q] = total > 0 && gab ? Math.round((contAlt[q][gab] || 0) / total * 100) : 0;
+  }
+
+  // Notas (escaladas para 0-10)
+  const notas = res.map(r => r.notaMax > 0 ? parseFloat(((r.nota / r.notaMax) * 10).toFixed(2)) : 0);
+  const media = notas.length ? notas.reduce((a,b) => a+b, 0) / notas.length : 0;
+  const maior = notas.length ? Math.max(...notas) : 0;
+  const menor = notas.length ? Math.min(...notas) : 0;
+  const aprov = notas.filter(n => n >= 6).length;
+  const pctAprov = total > 0 ? Math.round(aprov / total * 100) : 0;
+
+  // Histograma de notas: faixas 0-2, 2-4, 4-6, 6-8, 8-10
+  const histo = [0, 0, 0, 0, 0];
+  for (const n of notas) {
+    const idx = Math.min(4, Math.floor(n / 2));
+    histo[idx]++;
+  }
+
+  // Questões mais difíceis (sem anuladas) ordenadas por % acerto
+  const questoesOrd = [];
+  for (let q = 1; q <= nQ; q++) {
+    if (!p.anuladas?.[q]) questoesOrd.push({ q, pct: pctAcerto[q] });
+  }
+  questoesOrd.sort((a,b) => a.pct - b.pct);
+  const piores3 = questoesOrd.slice(0, 3);
+
+  // Ranking
+  const ranking = [...res]
+    .map(r => ({ nome: r.alunoNome || '?', nota: r.notaMax > 0 ? (r.nota/r.notaMax)*10 : 0 }))
+    .sort((a,b) => b.nota - a.nota);
+
+  // ── HTML de resumo ──
+  const resumoHtml = `
+    <div class="rel-resumo-grid">
+      <div class="rel-resumo-cell ${media >= 7 ? 'ok' : media >= 5 ? 'warn' : 'fail'}">
+        <div class="rv">${media.toFixed(1)}</div>
+        <div class="rl">Média da turma</div>
+      </div>
+      <div class="rel-resumo-cell ${pctAprov >= 70 ? 'ok' : pctAprov >= 50 ? 'warn' : 'fail'}">
+        <div class="rv">${pctAprov}%</div>
+        <div class="rl">Aprovação (≥6)</div>
+      </div>
+      <div class="rel-resumo-cell ok">
+        <div class="rv">${maior.toFixed(1)}</div>
+        <div class="rl">Maior nota</div>
+      </div>
+      <div class="rel-resumo-cell ${total > 0 ? 'fail' : ''}">
+        <div class="rv">${total > 0 ? menor.toFixed(1) : '—'}</div>
+        <div class="rl">Menor nota</div>
+      </div>
+    </div>
+    ${total === 0 ? `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">📭</div><div class="empty-title">Nenhuma correção ainda</div><div class="empty-sub">Corrija provas para ver o relatório.</div></div>` : ''}
+  `;
+
+  // Destaques: 3 piores questões
+  const pioresHtml = piores3.length && total > 0 ? `
+    <div class="rel-card">
+      <div class="rel-card-title">⚠️ Questões com menor acerto</div>
+      ${piores3.map(({ q, pct }) => `
+        <div class="rel-q-destaque low">
+          <span class="rel-q-num">Q${q}</span>
+          <span style="font-size:12px;color:var(--text-muted);flex:1">Gabarito: <strong style="color:var(--cyan)">${p.gabarito?.[q]||'?'}</strong></span>
+          <div class="rel-q-bar-wrap"><div class="rel-q-bar" style="width:${pct}%;background:#e31b23"></div></div>
+          <span class="rel-q-pct" style="color:#e31b23">${pct}%</span>
+        </div>
+      `).join('')}
+    </div>` : '';
+
+  // ── Abas ──
+  const abas = [
+    { id: 'questoes', label: '📊 Por questão' },
+    { id: 'distribuicao', label: '📉 Distribuição' },
+    { id: 'ranking', label: '🏆 Ranking' },
+    { id: 'distratores', label: '🔍 Distratores' },
+  ];
+
+  const tabsHtml = `
+    <div class="rel-tabs">
+      ${abas.map(a => `<div class="rel-tab ${_rel.abaAtiva===a.id?'active':''}" onclick="relAba('${a.id}')">${a.label}</div>`).join('')}
+    </div>
+  `;
+
+  // ── Conteúdo de cada aba ──
+  let abaHtml = '';
+
+  if (_rel.abaAtiva === 'questoes') {
+    // Barras horizontais por questão
+    const barsHtml = questoesOrd.length === 0 ? '<div style="padding:16px;color:var(--text-muted);text-align:center">Nenhuma questão válida</div>' :
+      `<div style="padding:0 16px 16px">
+        ${Array.from({length: nQ}, (_,i) => i+1).map(q => {
+          const pct = pctAcerto[q];
+          const gab = p.gabarito?.[q];
+          const anulada = p.anuladas?.[q];
+          const cor = anulada ? '#fdb913' : pct >= 70 ? 'var(--cyan)' : pct >= 40 ? '#fdb913' : '#e31b23';
+          return `
+            <div style="margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+                <span style="color:var(--text-muted)">Q${q}${gab?' · Gab:'+gab:''}${anulada?' · Anulada':''}</span>
+                <span style="font-weight:700;color:${cor}">${anulada?'—':pct+'%'}</span>
+              </div>
+              <div style="background:var(--surface2);border-radius:3px;height:8px;overflow:hidden">
+                <div style="height:100%;width:${anulada?100:pct}%;background:${cor};border-radius:3px;transition:width .5s"></div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+    abaHtml = barsHtml;
+
+  } else if (_rel.abaAtiva === 'distribuicao') {
+    abaHtml = `
+      <div class="rel-card">
+        <div class="rel-card-title">Distribuição de notas (0–10)</div>
+        <canvas id="chart-histo" height="180"></canvas>
+      </div>`;
+
+  } else if (_rel.abaAtiva === 'ranking') {
+    abaHtml = ranking.length === 0
+      ? `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">🏆</div><div class="empty-title">Sem dados</div></div>`
+      : `<div class="rel-card" style="padding:0 0 4px">
+          <div style="padding:12px 16px 0"><div class="rel-card-title">Ranking da turma</div></div>
+          ${ranking.map((r,i) => {
+            const cls = r.nota >= 7 ? 'var(--cyan)' : r.nota >= 5 ? '#fdb913' : '#e31b23';
+            const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+            return `
+              <div class="rel-rank-row">
+                <span class="rel-rank-pos">${medal||('#'+(i+1))}</span>
+                <span class="rel-rank-nome">${escapeHtml(r.nome)}</span>
+                <span class="rel-rank-nota" style="color:${cls}">${r.nota.toFixed(1)}</span>
+              </div>`;
+          }).join('')}
+        </div>`;
+
+  } else if (_rel.abaAtiva === 'distratores') {
+    if (total === 0) {
+      abaHtml = `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">🔍</div><div class="empty-title">Sem dados</div></div>`;
+    } else {
+      const validQs = Array.from({length: nQ}, (_,i)=>i+1).filter(q => !p.anuladas?.[q]);
+      abaHtml = `
+        <div style="padding:0 16px 8px;font-size:12px;color:var(--text-muted)">
+          Alternativas escolhidas por questão. <span style="color:var(--cyan)">Azul</span> = gabarito.
+        </div>
+        <div class="rel-card" style="padding:12px">
+          ${validQs.map(q => {
+            const gab = p.gabarito?.[q];
+            const totalR = letras.reduce((s,l) => s + (contAlt[q][l]||0), 0) + (contAlt[q]['branco']||0);
+            const maxCont = Math.max(1, ...letras.map(l => contAlt[q][l]||0));
+            return `
+              <div class="rel-dist-row">
+                <div class="rel-dist-head">
+                  <span style="font-weight:700;color:var(--text)">Q${q}</span>
+                  <span style="color:var(--text-muted);font-size:11px">Gab: <strong style="color:var(--cyan)">${gab||'?'}</strong> · ${pctAcerto[q]}% de acerto</span>
+                </div>
+                <div class="rel-dist-bars">
+                  ${letras.map(l => {
+                    const cnt = contAlt[q][l] || 0;
+                    const pct = maxCont > 0 ? Math.round(cnt/maxCont*100) : 0;
+                    const isGab = l === gab;
+                    const isErr = cnt > 0 && !isGab;
+                    return `
+                      <div class="rel-dist-alt ${isGab?'correta':isErr?'erro':''}">
+                        <div class="rel-dist-bar-wrap">
+                          <div class="rel-dist-bar-inner" style="height:${pct}%"></div>
+                        </div>
+                        <div class="rel-dist-label ${isGab?'correta':isErr?'erro':''}">${l}</div>
+                        <div style="font-size:9px;color:var(--text-dim)">${cnt}</div>
+                      </div>`;
+                  }).join('')}
+                </div>
+              </div>`;
+          }).join('')}
+        </div>`;
+    }
+  }
+
+  bodyEl.innerHTML = resumoHtml + (total > 0 ? pioresHtml + tabsHtml + abaHtml : '');
+
+  // Chart.js: monta gráfico de histograma se for a aba distribuição
+  if (_rel.abaAtiva === 'distribuicao' && total > 0) {
+    const canvas = document.getElementById('chart-histo');
+    if (canvas && window.Chart) {
+      const cores = histo.map((_,i) => i < 2 ? '#e31b23' : i < 3 ? '#fdb913' : 'rgba(0,180,216,0.85)');
+      const chart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: ['0–2', '2–4', '4–6', '6–8', '8–10'],
+          datasets: [{
+            label: 'Alunos',
+            data: histo,
+            backgroundColor: cores,
+            borderRadius: 6,
+            borderSkipped: false,
+          }]
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#8897a8' }, grid: { display: false } },
+            y: {
+              ticks: { color: '#8897a8', stepSize: 1 },
+              grid: { color: 'rgba(255,255,255,0.06)' },
+              beginAtZero: true
+            }
+          }
+        }
+      });
+      _rel.chartInstances.push(chart);
+    }
+  }
+}
+
+/* ─── Troca de aba ─── */
+function relAba(aba) {
+  _rel.abaAtiva = aba;
+  relRender();
+}
 </script>
 
 </body>
