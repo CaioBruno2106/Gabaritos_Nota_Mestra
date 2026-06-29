@@ -1647,7 +1647,7 @@ html, body {
    MODAL
 ═══════════════════════════════════════════════ */
 .modal-overlay {
-  position: fixed; inset: 0; z-index: 200;
+  position: fixed; inset: 0; z-index: 1000;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
   display: flex; align-items: flex-end;
   animation: fade-in 0.2s ease;
@@ -3481,7 +3481,7 @@ const corr = {
 
 /* Seletor de alternativa (popup) */
 .e4-alt-modal {
-  position: fixed; inset: 0; z-index: 600;
+  position: fixed; inset: 0; z-index: 1100;
   background: rgba(0,0,0,.65); backdrop-filter: blur(4px);
   display: flex; align-items: flex-end; animation: fade-in .15s ease;
 }
