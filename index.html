@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
 <title>Leitor de Gabaritos</title>
-<!-- build: v2 (Etapa 2 — CRUD Turmas, Alunos, Provas) -->
+<!-- build: v4.1 (Etapa 4.1 — Multi-escola, Gestão/Coordenação/Professor) -->
 
 <!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -2323,7 +2323,7 @@ html, body {
       </div>
       <div>
         <div class="topbar-title">Leitor de Gabaritos</div>
-        <div class="topbar-escola" id="topbar-escola-name">Carregando...</div>
+        <div class="topbar-escola" id="topbar-escola-name" onclick="abrirSeletorEscolas()" style="cursor:pointer">Carregando... ▾</div>
       </div>
     </div>
     <div class="topbar-right">
@@ -2410,7 +2410,10 @@ const app = {
   obMode:     null    // 'create' | 'join'
 };
 
-function isGestor() { return app.professor?.role === 'gestor'; }
+function isDono()  { return app.professor?.role === 'gestor'; }
+function isGestao(){ return app.professor?.role === 'gestor' || app.professor?.role === 'coordenador'; }
+function isGestor(){ return isGestao(); }  // compat: gestor==gestao (engloba coordenador)
+function papelLabel(r){ return r==='gestor'?'Gestor(a)':(r==='coordenador'?'Coordenação':'Professor(a)'); }
 
 /* ═══════════════════════════════════════════
    UTILIDADES
@@ -2522,15 +2525,20 @@ auth.onAuthStateChanged(async (user) => {
     const profDoc = await db.collection('professores').doc(user.uid).get();
     if (profDoc.exists) {
       const profData = profDoc.data();
+      // Migração: legado tinha apenas escolaId/role; converte para escolas[]
+      let escolas = Array.isArray(profData.escolas) ? profData.escolas.slice() : [];
+      if (escolas.length === 0 && profData.escolaId) {
+        escolas = [{ escolaId: profData.escolaId, escolaNome: profData.escolaNome||'', role: profData.role||'professor' }];
+        await db.collection('professores').doc(user.uid).set({ escolas }, { merge: true });
+      }
+      profData.escolas = escolas;
       app.professor = profData;
-      if (profData.escolaId) {
-        app.escolaId = profData.escolaId;
-        const escolaDoc = await db.collection('escolas').doc(profData.escolaId).get();
-        if (escolaDoc.exists) {
-          app.escola = escolaDoc.data();
-          showApp();
-          return;
-        }
+      if (escolas.length > 0) {
+        // Escolhe ativa: salva em profData.escolaAtivaId, ou primeira
+        const ativaId = profData.escolaAtivaId && escolas.find(e=>e.escolaId===profData.escolaAtivaId)
+          ? profData.escolaAtivaId : escolas[0].escolaId;
+        await ativarEscola(ativaId, { skipReload: false });
+        return;
       }
     }
     // Sem escola vinculada → onboarding
@@ -2601,10 +2609,19 @@ async function criarEscola() {
       exists = !snap.empty;
     }
 
+    // Código separado para coordenação/gestão (acesso completo, exceto excluir/editar escola)
+    let codigoGestao, existsG = true;
+    while (existsG) {
+      codigoGestao = gerarCodigo();
+      if (codigoGestao === codigo) continue;
+      const snapG = await db.collection('escolas').where('codigoGestao','==',codigoGestao).limit(1).get();
+      const snapG2 = await db.collection('escolas').where('codigo','==',codigoGestao).limit(1).get();
+      existsG = !snapG.empty || !snapG2.empty;
+    }
     const escolaRef = db.collection('escolas').doc();
     const escolaId  = escolaRef.id;
     const escolaData = {
-      nome, cidade, rede, codigo,
+      nome, cidade, rede, codigo, codigoGestao,
       criadoPor: app.user.uid,
       criadoEm: firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -2634,7 +2651,12 @@ async function joinEscola() {
 
   setLoading('btn-join-escola', true);
   try {
-    const snap = await db.collection('escolas').where('codigo','==',code).limit(1).get();
+    let role = 'professor';
+    let snap = await db.collection('escolas').where('codigo','==',code).limit(1).get();
+    if (snap.empty) {
+      snap = await db.collection('escolas').where('codigoGestao','==',code).limit(1).get();
+      if (!snap.empty) role = 'coordenador';
+    }
     if (snap.empty) {
       document.getElementById('join-error').classList.remove('hidden');
       setLoading('btn-join-escola', false);
@@ -2644,7 +2666,7 @@ async function joinEscola() {
     const escolaId   = escolaDoc.id;
     const escolaData = escolaDoc.data();
 
-    await vincularProfessor(escolaId, escolaData.nome, 'professor');
+    await vincularProfessor(escolaId, escolaData.nome, role);
 
     app.escola   = escolaData;
     app.escolaId = escolaId;
@@ -2663,16 +2685,30 @@ async function joinEscola() {
 
 async function vincularProfessor(escolaId, escolaNome, role) {
   const u = app.user;
-  await db.collection('professores').doc(u.uid).set({
+  const ref = db.collection('professores').doc(u.uid);
+  const snap = await ref.get();
+  const cur  = snap.exists ? (snap.data() || {}) : {};
+  let escolas = Array.isArray(cur.escolas) ? cur.escolas.slice() : [];
+  // Migração de legado
+  if (escolas.length === 0 && cur.escolaId) {
+    escolas.push({ escolaId: cur.escolaId, escolaNome: cur.escolaNome||'', role: cur.role||'professor' });
+  }
+  // Substitui ou adiciona
+  const idx = escolas.findIndex(e => e.escolaId === escolaId);
+  if (idx >= 0) escolas[idx] = { escolaId, escolaNome, role };
+  else escolas.push({ escolaId, escolaNome, role });
+
+  await ref.set({
     nome:       u.displayName || 'Professor',
     email:      u.email,
     foto:       u.photoURL || '',
-    escolaId,
-    escolaNome,
-    role,
+    escolas,
+    escolaAtivaId: escolaId,
+    // legado (compat)
+    escolaId, escolaNome, role,
     vinculadoEm: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
-  app.professor = { nome: u.displayName, email: u.email, foto: u.photoURL, escolaId, escolaNome, role };
+  app.professor = { ...(cur||{}), nome: u.displayName, email: u.email, foto: u.photoURL, escolas, escolaAtivaId: escolaId, escolaId, escolaNome, role };
 }
 
 function finishOnboarding() {
@@ -2693,7 +2729,7 @@ function showApp() {
 
   // Topbar
   const u = app.user;
-  document.getElementById('topbar-escola-name').textContent = app.escola?.nome || '—';
+  document.getElementById('topbar-escola-name').innerHTML = (app.escola?.nome || '—') + ' <span style="opacity:.7">▾</span>';
   const avatarEl = document.getElementById('topbar-avatar');
   const initialsEl = document.getElementById('topbar-avatar-initials');
   if (u?.photoURL) {
@@ -2810,8 +2846,8 @@ function mais() {
       <div class="mais-profile-name">${u?.displayName || 'Professor'}</div>
       <div class="mais-profile-email">${u?.email || ''}</div>
     </div>
-    <span class="badge badge-${isGestor() ? 'yellow' : 'blue'}">
-      ${isGestor() ? 'Gestor' : 'Professor'}
+    <span class="badge badge-${isDono() ? 'yellow' : (app.professor?.role==='coordenador'?'cyan':'blue')}">
+      ${papelLabel(app.professor?.role)}
     </span>
   </div>
 
@@ -2832,12 +2868,37 @@ function mais() {
         <div class="mais-item-sub">${app.escola?.cidade || ''} · ${app.escola?.rede || ''}</div>
       </div>
     </div>
-    ${ isGestor() ? `
+    <div class="mais-item" onclick="abrirSeletorEscolas()">
+      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">🔁</div>
+      <div class="mais-item-text">
+        <div class="mais-item-title">Trocar de escola</div>
+        <div class="mais-item-sub">${(app.professor?.escolas||[]).length} escola(s) vinculada(s)</div>
+      </div>
+      <div class="mais-item-arrow">›</div>
+    </div>
+    ${ isGestao() ? `
     <div class="mais-item" onclick="abrirEquipe()">
       <div class="mais-item-icon" style="background:rgba(245,166,35,0.15);">👥</div>
       <div class="mais-item-text">
         <div class="mais-item-title">Gerenciar equipe</div>
-        <div class="mais-item-sub">Ver e remover professores vinculados</div>
+        <div class="mais-item-sub">Ver, promover e remover membros</div>
+      </div>
+      <div class="mais-item-arrow">›</div>
+    </div>` : '' }
+    ${ isDono() ? `
+    <div class="mais-item" onclick="mostrarCodigoGestao()">
+      <div class="mais-item-icon" style="background:rgba(245,166,35,0.18);">🛡️</div>
+      <div class="mais-item-text">
+        <div class="mais-item-title">Código de gestão</div>
+        <div class="mais-item-sub">Para convidar coordenadores(as) com acesso completo</div>
+      </div>
+      <div class="mais-item-arrow">›</div>
+    </div>
+    <div class="mais-item" onclick="abrirEditarEscola()">
+      <div class="mais-item-icon" style="background:rgba(26,86,160,0.18);">✏️</div>
+      <div class="mais-item-text">
+        <div class="mais-item-title">Editar dados da escola</div>
+        <div class="mais-item-sub">Nome, cidade, rede</div>
       </div>
       <div class="mais-item-arrow">›</div>
     </div>
@@ -2845,14 +2906,14 @@ function mais() {
       <div class="mais-item-icon" style="background:rgba(230,57,70,0.12);">🗑️</div>
       <div class="mais-item-text">
         <div class="mais-item-title" style="color:var(--red)">Excluir escola</div>
-        <div class="mais-item-sub">Remove a escola e todos os dados. Você poderá criar ou entrar em outra.</div>
+        <div class="mais-item-sub">Remove a escola e todos os dados desta escola.</div>
       </div>
     </div>` : `
     <div class="mais-item" onclick="confirmSairEscola()">
       <div class="mais-item-icon" style="background:rgba(230,57,70,0.12);">🚪</div>
       <div class="mais-item-text">
-        <div class="mais-item-title" style="color:var(--red)">Sair da escola</div>
-        <div class="mais-item-sub">Desvincula você desta escola. Você poderá entrar em outra com um código.</div>
+        <div class="mais-item-title" style="color:var(--red)">Sair desta escola</div>
+        <div class="mais-item-sub">Desvincula você apenas desta escola.</div>
       </div>
     </div>` }
   </div>
@@ -2881,7 +2942,7 @@ function mais() {
   </div>
 
   <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:11px;">
-    Leitor de Gabaritos v2.0 · Etapa 2
+    Leitor de Gabaritos v4.1 · Etapa 4.1
   </div>`;
 }
 
@@ -2929,30 +2990,40 @@ function confirmSairEscola() {
     </div>
     <button class="btn btn-danger" onclick="sairEscola()">Sim, sair da escola</button>
     <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
-  `);
+  \`);
 }
 
 async function sairEscola() {
   try {
-    await db.collection('professores').doc(app.user.uid).update({
-      escolaId:   firebase.firestore.FieldValue.delete(),
-      escolaNome: firebase.firestore.FieldValue.delete(),
-      role:       firebase.firestore.FieldValue.delete()
-    });
+    const escolaIdSair = app.escolaId;
+    const ref = db.collection('professores').doc(app.user.uid);
+    const escolas = (app.professor?.escolas || []).filter(e => e.escolaId !== escolaIdSair);
+    const patch = { escolas };
+    // Limpa legado se for da escola que está saindo
+    if (app.professor?.escolaId === escolaIdSair) {
+      patch.escolaId   = firebase.firestore.FieldValue.delete();
+      patch.escolaNome = firebase.firestore.FieldValue.delete();
+      patch.role       = firebase.firestore.FieldValue.delete();
+      patch.escolaAtivaId = firebase.firestore.FieldValue.delete();
+    }
+    await ref.set(patch, { merge: true });
     cache.turmas = cache.alunos = cache.provas = null;
-    app.escolaId  = null;
-    app.escola    = null;
-    app.professor = null;
+    app.professor.escolas = escolas;
     closeModal();
-    toast('Você saiu da escola.', 'success');
-    showScreen('screen-onboarding');
-    showObStep(1);
+    toast('Você saiu desta escola.', 'success');
+    if (escolas.length > 0) {
+      await ativarEscola(escolas[0].escolaId);
+    } else {
+      app.escolaId = null; app.escola = null;
+      showScreen('screen-onboarding'); showObStep(1);
+    }
   } catch (e) {
     toast('Erro ao sair: ' + e.message, 'error');
   }
 }
 
 function confirmExcluirEscola() {
+  if (!isDono()) { toast('Apenas o gestor pode excluir a escola.', 'error'); return; }
   closeModal();
   showModal(`
     <div class="modal-handle"></div>
@@ -2963,10 +3034,11 @@ function confirmExcluirEscola() {
     </div>
     <button class="btn btn-danger" id="btn-confirmar-exclusao" onclick="excluirEscola()">Excluir tudo</button>
     <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
-  `);
+  \`);
 }
 
 async function excluirEscola() {
+  if (!isDono()) { toast('Apenas o gestor pode excluir a escola.', 'error'); return; }
   const escolaId = app.escolaId;
   const btnEl = document.getElementById('btn-confirmar-exclusao');
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Excluindo...'; }
@@ -2998,13 +3070,17 @@ async function excluirEscola() {
     await db.collection('escolas').doc(escolaId).delete();
 
     cache.turmas = cache.alunos = cache.provas = null;
-    app.escolaId  = null;
-    app.escola    = null;
-    app.professor = null;
+    // Remove a escola excluída do array do usuário atual
+    const escolasRest = (app.professor?.escolas || []).filter(e => e.escolaId !== escolaId);
+    app.professor.escolas = escolasRest;
     closeModal();
     toast('Escola excluída com sucesso.', 'success');
-    showScreen('screen-onboarding');
-    showObStep(1);
+    if (escolasRest.length > 0) {
+      await ativarEscola(escolasRest[0].escolaId);
+    } else {
+      app.escolaId = null; app.escola = null; app.professor.escolaAtivaId = null;
+      showScreen('screen-onboarding'); showObStep(1);
+    }
   } catch (e) {
     toast('Erro ao excluir: ' + e.message, 'error');
     if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Excluir tudo'; }
@@ -3081,6 +3157,360 @@ async function removerProfessor(uid) {
     toast('Erro: '+e.message, 'error');
   }
 }
+
+
+/* ════════════════════════════════════════════════════════════════
+   ETAPA 4.1 — Multi-escola, troca de escola, coordenação
+═══════════════════════════════════════════════════════════════════ */
+
+async function ativarEscola(escolaId, opts = {}) {
+  const escolaDoc = await db.collection('escolas').doc(escolaId).get();
+  if (!escolaDoc.exists) {
+    toast('Escola não encontrada — pode ter sido excluída.', 'error');
+    // Remove do array
+    const profRef = db.collection('professores').doc(app.user.uid);
+    const escolas = (app.professor?.escolas || []).filter(e => e.escolaId !== escolaId);
+    await profRef.set({ escolas }, { merge: true });
+    app.professor.escolas = escolas;
+    if (escolas.length === 0) {
+      app.escolaId = null; app.escola = null;
+      showScreen('screen-onboarding'); showObStep(1);
+      return;
+    }
+    return ativarEscola(escolas[0].escolaId);
+  }
+  const escolaData = escolaDoc.data();
+  const vinculo = (app.professor?.escolas || []).find(e => e.escolaId === escolaId);
+  const role = vinculo?.role || 'professor';
+  app.escolaId = escolaId;
+  app.escola   = escolaData;
+  app.professor.escolaAtivaId = escolaId;
+  app.professor.role = role;
+  app.professor.escolaId = escolaId;
+  app.professor.escolaNome = escolaData.nome;
+  // Limpa caches da escola anterior
+  cache.turmas = cache.alunos = cache.provas = null;
+  try {
+    await db.collection('professores').doc(app.user.uid).set({
+      escolaAtivaId: escolaId, escolaId, escolaNome: escolaData.nome, role
+    }, { merge: true });
+  } catch(_) {}
+  if (!opts.skipShowApp) showApp();
+}
+
+function abrirSeletorEscolas() {
+  const escolas = app.professor?.escolas || [];
+  const itens = escolas.length === 0
+    ? `<div style="text-align:center;padding:24px 0;color:var(--text-muted);font-size:13px">Nenhuma escola vinculada.</div>`
+    : escolas.map(e => `
+      <div onclick="trocarEscolaAtiva('${e.escolaId}')"
+        style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:${e.escolaId===app.escolaId?'rgba(0,180,216,0.12)':'var(--surface2)'};border:1px solid ${e.escolaId===app.escolaId?'var(--cyan)':'var(--border2)'}">
+        <div style="width:38px;height:38px;border-radius:10px;background:rgba(26,86,160,0.18);display:flex;align-items:center;justify-content:center;font-size:18px">🏫</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(e.escolaNome||'—')}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${papelLabel(e.role)}${e.escolaId===app.escolaId?' · Ativa':''}</div>
+        </div>
+        ${e.escolaId===app.escolaId?'<span style="color:var(--cyan);font-size:18px">✓</span>':''}
+      </div>`).join('');
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Suas escolas</div>
+    <div style="max-height:45vh;overflow-y:auto;margin-bottom:8px">${itens}</div>
+    <button class="btn btn-cyan" onclick="iniciarCriarOutraEscola()">+ Criar nova escola</button>
+    <button class="btn btn-secondary" onclick="iniciarEntrarOutraEscola()">Entrar com código em outra escola</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+  `);
+}
+
+async function trocarEscolaAtiva(escolaId) {
+  if (escolaId === app.escolaId) { closeModal(); return; }
+  closeModal();
+  toast('Carregando escola...', '');
+  await ativarEscola(escolaId);
+}
+
+function iniciarCriarOutraEscola() {
+  closeModal();
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Criar nova escola</div>
+    <div class="auth-field"><label>Nome</label><input class="input" id="m-esc-nome" placeholder="Ex.: EREM Ginásio Pernambucano"></div>
+    <div class="auth-field"><label>Cidade</label><input class="input" id="m-esc-cidade" placeholder="Ex.: Recife"></div>
+    <div class="auth-field"><label>Rede</label>
+      <select class="input" id="m-esc-rede">
+        <option value="">Selecione...</option>
+        <option value="Estadual">Estadual</option>
+        <option value="Municipal">Municipal</option>
+        <option value="Federal">Federal</option>
+        <option value="Particular">Particular</option>
+      </select>
+    </div>
+    <button class="btn btn-cyan" id="btn-criar-out-escola" onclick="criarOutraEscolaConfirm()">Criar e entrar</button>
+    <button class="btn btn-ghost" onclick="abrirSeletorEscolas()">Voltar</button>
+  `);
+}
+
+async function criarOutraEscolaConfirm() {
+  const nome   = document.getElementById('m-esc-nome').value.trim();
+  const cidade = document.getElementById('m-esc-cidade').value.trim();
+  const rede   = document.getElementById('m-esc-rede').value;
+  if (!nome || !cidade || !rede) { toast('Preencha todos os campos', 'error'); return; }
+  setLoading('btn-criar-out-escola', true);
+  try {
+    let codigo, exists=true;
+    while (exists) {
+      codigo = gerarCodigo();
+      const sn = await db.collection('escolas').where('codigo','==',codigo).limit(1).get();
+      exists = !sn.empty;
+    }
+    let codigoGestao, existsG=true;
+    while (existsG) {
+      codigoGestao = gerarCodigo();
+      if (codigoGestao===codigo) continue;
+      const a = await db.collection('escolas').where('codigoGestao','==',codigoGestao).limit(1).get();
+      const b = await db.collection('escolas').where('codigo','==',codigoGestao).limit(1).get();
+      existsG = !a.empty || !b.empty;
+    }
+    const ref = db.collection('escolas').doc();
+    const dados = { nome, cidade, rede, codigo, codigoGestao, criadoPor: app.user.uid, criadoEm: firebase.firestore.FieldValue.serverTimestamp() };
+    await ref.set(dados);
+    await vincularProfessor(ref.id, nome, 'gestor');
+    closeModal();
+    toast('Escola criada! Trocando...', 'success');
+    await ativarEscola(ref.id);
+  } catch(e) { toast('Erro: '+e.message, 'error'); setLoading('btn-criar-out-escola', false); }
+}
+
+function iniciarEntrarOutraEscola() {
+  closeModal();
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Entrar com código</div>
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">
+      Use o <strong style="color:var(--text)">código da escola</strong> (acesso de professor)
+      ou o <strong style="color:var(--text)">código de gestão</strong> (acesso de coordenação).
+    </div>
+    <div class="auth-field">
+      <input class="input input-code" id="m-join-cod" type="text" maxlength="6" placeholder="A1B2C3" style="text-transform:uppercase;letter-spacing:6px;text-align:center;font-weight:700;font-size:20px">
+    </div>
+    <div id="m-join-err" class="hidden" style="color:var(--red);font-size:13px;margin-bottom:8px">Código inválido — verifique e tente novamente.</div>
+    <button class="btn btn-cyan" id="btn-join-out" onclick="entrarOutraEscolaConfirm()">Entrar</button>
+    <button class="btn btn-ghost" onclick="abrirSeletorEscolas()">Voltar</button>
+  `);
+}
+
+async function entrarOutraEscolaConfirm() {
+  const code = (document.getElementById('m-join-cod').value||'').trim().toUpperCase();
+  if (code.length !== 6) { toast('Código deve ter 6 caracteres', 'error'); return; }
+  setLoading('btn-join-out', true);
+  try {
+    let role = 'professor';
+    let snap = await db.collection('escolas').where('codigo','==',code).limit(1).get();
+    if (snap.empty) {
+      snap = await db.collection('escolas').where('codigoGestao','==',code).limit(1).get();
+      if (!snap.empty) role = 'coordenador';
+    }
+    if (snap.empty) {
+      document.getElementById('m-join-err').classList.remove('hidden');
+      setLoading('btn-join-out', false); return;
+    }
+    const eDoc = snap.docs[0];
+    // Já está vinculado?
+    const ja = (app.professor?.escolas || []).find(e => e.escolaId === eDoc.id);
+    if (ja) {
+      // Atualiza papel se for um upgrade (gestão > professor)
+      const upgrade = role==='coordenador' && ja.role==='professor';
+      if (upgrade) await vincularProfessor(eDoc.id, eDoc.data().nome, 'coordenador');
+      closeModal();
+      toast(upgrade?'Promovido(a) a coordenação!':'Você já participa desta escola.', 'success');
+      await ativarEscola(eDoc.id);
+      return;
+    }
+    await vincularProfessor(eDoc.id, eDoc.data().nome, role);
+    closeModal();
+    toast('Vinculado(a) com sucesso!', 'success');
+    await ativarEscola(eDoc.id);
+  } catch(e) { toast('Erro: '+e.message, 'error'); setLoading('btn-join-out', false); }
+}
+
+function mostrarCodigoGestao() {
+  const c = app.escola?.codigoGestao;
+  if (!c) {
+    // Escola antiga sem código de gestão — gera agora
+    return gerarCodigoGestaoAgora();
+  }
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Código de gestão</div>
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">
+      Quem entrar com este código terá <strong style="color:var(--text)">acesso completo de coordenação</strong> —
+      todas as funções de gestão, exceto <strong style="color:var(--text)">excluir ou editar os dados principais da escola</strong>.
+    </div>
+    <div class="code-display" style="margin:0">
+      <div class="code-display-label">${escapeHtml(app.escola?.nome||'')}</div>
+      <div class="code-display-value">${c}</div>
+      <div class="code-display-hint">Use apenas com pessoas da equipe gestora</div>
+      <button class="code-copy-btn" onclick="navigator.clipboard?.writeText('${c}'); toast('Copiado!','success')">Copiar</button>
+    </div>
+    <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+  `);
+}
+
+async function gerarCodigoGestaoAgora() {
+  try {
+    let codigoGestao, existsG=true;
+    while (existsG) {
+      codigoGestao = gerarCodigo();
+      if (codigoGestao===app.escola?.codigo) continue;
+      const a = await db.collection('escolas').where('codigoGestao','==',codigoGestao).limit(1).get();
+      const b = await db.collection('escolas').where('codigo','==',codigoGestao).limit(1).get();
+      existsG = !a.empty || !b.empty;
+    }
+    await db.collection('escolas').doc(app.escolaId).set({ codigoGestao }, { merge: true });
+    app.escola.codigoGestao = codigoGestao;
+    mostrarCodigoGestao();
+  } catch(e) { toast('Erro: '+e.message, 'error'); }
+}
+
+function abrirEditarEscola() {
+  if (!isDono()) return;
+  const e = app.escola || {};
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Editar dados da escola</div>
+    <div class="auth-field"><label>Nome</label><input class="input" id="ed-nome" value="${escapeHtml(e.nome||'')}"></div>
+    <div class="auth-field"><label>Cidade</label><input class="input" id="ed-cidade" value="${escapeHtml(e.cidade||'')}"></div>
+    <div class="auth-field"><label>Rede</label>
+      <select class="input" id="ed-rede">
+        ${['Estadual','Municipal','Federal','Particular'].map(o=>`<option ${o===e.rede?'selected':''}>${o}</option>`).join('')}
+      </select>
+    </div>
+    <button class="btn btn-cyan" id="btn-salvar-esc" onclick="salvarEditarEscola()">Salvar</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function salvarEditarEscola() {
+  if (!isDono()) return;
+  const nome = document.getElementById('ed-nome').value.trim();
+  const cidade = document.getElementById('ed-cidade').value.trim();
+  const rede = document.getElementById('ed-rede').value;
+  if (!nome || !cidade) { toast('Preencha nome e cidade', 'error'); return; }
+  setLoading('btn-salvar-esc', true);
+  try {
+    await db.collection('escolas').doc(app.escolaId).set({ nome, cidade, rede }, { merge: true });
+    app.escola.nome = nome; app.escola.cidade = cidade; app.escola.rede = rede;
+    // Atualiza escolaNome no array do professor
+    const escolas = (app.professor.escolas||[]).map(x => x.escolaId===app.escolaId?{...x, escolaNome: nome}:x);
+    await db.collection('professores').doc(app.user.uid).set({ escolas, escolaNome: nome }, { merge: true });
+    app.professor.escolas = escolas;
+    closeModal();
+    toast('Dados atualizados', 'success');
+    showApp();
+  } catch(e) { toast('Erro: '+e.message, 'error'); setLoading('btn-salvar-esc', false); }
+}
+
+/* Override de abrirEquipe: agora lista TODOS membros (gestor, coordenadores, professores)
+   e permite gestor/coordenador promover/rebaixar/remover. */
+async function abrirEquipe() {
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Equipe da escola</div>
+    <div style="display:flex;justify-content:center;padding:16px 0">
+      <div class="spinner" style="width:28px;height:28px;border-width:3px;color:var(--cyan)"></div>
+    </div>
+  `);
+  try {
+    // Busca todos professores que tenham esta escola no array OU no campo legado
+    const [snapArr, snapLeg] = await Promise.all([
+      db.collection('professores').where('escolaAtivaId','==',app.escolaId).get().catch(()=>({docs:[]})),
+      db.collection('professores').where('escolaId','==',app.escolaId).get().catch(()=>({docs:[]}))
+    ]);
+    const byId = {};
+    [...snapArr.docs, ...snapLeg.docs].forEach(d => { byId[d.id] = { uid: d.id, ...d.data() }; });
+    // Também precisamos pegar quem tem no array `escolas` mas ativa é outra → busca ampla por segurança
+    const snapAll = await db.collection('professores').get();
+    snapAll.docs.forEach(d => {
+      const data = d.data();
+      const list = data.escolas || [];
+      if (list.some(e => e.escolaId === app.escolaId)) {
+        const vinc = list.find(e => e.escolaId === app.escolaId);
+        byId[d.id] = { uid: d.id, ...data, _roleNesta: vinc.role };
+      }
+    });
+    let membros = Object.values(byId).map(m => ({
+      ...m,
+      papelNesta: m._roleNesta || ((m.escolaId===app.escolaId)?m.role:(m.escolas||[]).find(e=>e.escolaId===app.escolaId)?.role) || 'professor'
+    }));
+    // Ordena: gestor > coordenador > professor
+    const ord = { gestor:0, coordenador:1, professor:2 };
+    membros.sort((a,b)=>(ord[a.papelNesta]??9)-(ord[b.papelNesta]??9) || (a.nome||'').localeCompare(b.nome||''));
+
+    const lista = membros.length === 0
+      ? `<div style="text-align:center;padding:24px 0;color:var(--text-muted);font-size:13px">Nenhum membro vinculado ainda.</div>`
+      : membros.map(m => {
+        const eu = m.uid === app.user.uid;
+        const ehDono = m.papelNesta === 'gestor';
+        const podeEditar = isGestao() && !ehDono && !eu;
+        const acoes = !podeEditar ? '' : `
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+            ${m.papelNesta==='professor' ? `<button onclick="alterarPapelMembro('${m.uid}','coordenador')" style="padding:5px 9px;border-radius:7px;background:rgba(245,166,35,0.15);border:1px solid rgba(245,166,35,0.3);color:var(--yellow);font-size:11px;font-weight:600;cursor:pointer">↑ Promover a coord.</button>` : ''}
+            ${m.papelNesta==='coordenador' ? `<button onclick="alterarPapelMembro('${m.uid}','professor')" style="padding:5px 9px;border-radius:7px;background:rgba(26,86,160,0.12);border:1px solid rgba(26,86,160,0.25);color:var(--blue);font-size:11px;font-weight:600;cursor:pointer">↓ Rebaixar a prof.</button>` : ''}
+            <button onclick="confirmarRemoverProf('${m.uid}','${escapeHtml(m.nome||'').replace(/'/g, "\\'")}')" style="padding:5px 9px;border-radius:7px;background:rgba(230,57,70,0.1);border:1px solid rgba(230,57,70,0.25);color:var(--red);font-size:11px;font-weight:600;cursor:pointer">Remover</button>
+          </div>`;
+        const badgeCor = ehDono ? 'yellow' : (m.papelNesta==='coordenador'?'cyan':'blue');
+        return `
+        <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border2)">
+          <div style="width:36px;height:36px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--cyan);flex-shrink:0">
+            ${(m.nome||'?').trim().split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase()}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <div style="font-size:14px;font-weight:600;color:var(--text)">${escapeHtml(m.nome||'—')}${eu?' (você)':''}</div>
+              <span class="badge badge-${badgeCor}" style="font-size:10px">${papelLabel(m.papelNesta)}</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted)">${escapeHtml(m.email||'')}</div>
+            ${acoes}
+          </div>
+        </div>`;
+      }).join('');
+    closeModal();
+    showModal(`
+      <div class="modal-handle"></div>
+      <div class="modal-title">Equipe · ${membros.length} membro${membros.length!==1?'s':''}</div>
+      <div style="max-height:55vh;overflow-y:auto">${lista}</div>
+      <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+    `);
+  } catch(e) {
+    closeModal();
+    toast('Erro ao carregar equipe: '+e.message, 'error');
+  }
+}
+
+async function alterarPapelMembro(uid, novoPapel) {
+  if (!isGestao()) return;
+  try {
+    const ref = db.collection('professores').doc(uid);
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    const data = snap.data();
+    let escolas = Array.isArray(data.escolas) ? data.escolas.slice() : [];
+    if (escolas.length === 0 && data.escolaId) {
+      escolas = [{ escolaId: data.escolaId, escolaNome: data.escolaNome||'', role: data.role||'professor' }];
+    }
+    const idx = escolas.findIndex(e => e.escolaId === app.escolaId);
+    if (idx >= 0) escolas[idx] = { ...escolas[idx], role: novoPapel };
+    else escolas.push({ escolaId: app.escolaId, escolaNome: app.escola.nome, role: novoPapel });
+
+    const patch = { escolas };
+    if (data.escolaId === app.escolaId) patch.role = novoPapel;
+    if (data.escolaAtivaId === app.escolaId) patch.role = novoPapel;
+    await ref.set(patch, { merge: true });
+    toast('Papel atualizado', 'success');
+    abrirEquipe();
+  } catch(e) { toast('Erro: '+e.message, 'error'); }
+}
+
 
 function showModal(html) {
   closeModal();
