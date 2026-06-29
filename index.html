@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
 <title>Leitor de Gabaritos</title>
-<!-- build: v2 (Etapa 2 — CRUD Turmas, Alunos, Provas) -->
+<!-- build: v3 (Etapa 3 — Gabarito em PDF) -->
 
 <!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════════
-   ETAPA 2 — CRUD Turmas, Alunos, Provas
+   ETAPA 3 — Gerador de Gabarito PDF
 ════════════════════════════════════════════════════════════════ */
 
 /* Refs Firestore */
@@ -684,10 +684,10 @@ function wizardStep3() {
   const marcadas = Object.values(d.gabarito).filter(Boolean).length;
   let rows = '';
   for (let q=1; q<=total; q++) {
-    rows += `<div class="gab-row">
+    rows += `<div class="gab-row" data-q="${q}">
       <div class="gab-q-num">${q}.</div>
       <div class="gab-options">
-        ${letras.map(L => `<div class="gab-bubble ${d.gabarito[q]===L?'selected':''}" onclick="marcarGab(${q},'${L}')">${L}</div>`).join('')}
+        ${letras.map(L => `<div class="gab-bubble ${d.gabarito[q]===L?'selected':''}" data-l="${L}" onclick="marcarGab(${q},'${L}')">${L}</div>`).join('')}
       </div>
     </div>`;
   }
@@ -695,7 +695,7 @@ function wizardStep3() {
     <div class="wizard-step-label">Passo 3 de 4</div>
     <div class="wizard-step-title">Gabarito</div>
     <div class="wizard-step-sub">
-      Marque a alternativa correta de cada questão. <strong style="color:var(--cyan)">${marcadas}/${total}</strong> marcadas.
+      Marque a alternativa correta de cada questão. <strong id="gab-counter" style="color:var(--cyan)">${marcadas}/${total}</strong> marcadas.
     </div>
     <div class="wizard-body">
       <div class="gab-list">${rows}</div>
@@ -708,8 +708,25 @@ function wizardStep3() {
 }
 function marcarGab(q, L) {
   wizard.data.gabarito[q] = L;
-  // re-render só o passo 3 (mais simples: rerender wizard)
-  renderWizard();
+
+  // Atualiza só as bolhas da questão no DOM — sem re-renderizar, sem perder scroll
+  const row = document.querySelector(`.gab-row[data-q="${q}"]`);
+  if (row) {
+    row.querySelectorAll('.gab-bubble').forEach(el => {
+      el.classList.toggle('selected', el.dataset.l === L);
+    });
+    // Atualiza contador no topo
+    const total    = wizard.data.numQuestoes;
+    const marcadas = Object.values(wizard.data.gabarito).filter(Boolean).length;
+    const counter  = document.getElementById('gab-counter');
+    if (counter) counter.textContent = `${marcadas} de ${total} marcadas`;
+  } else {
+    // Fallback: re-renderiza preservando scroll
+    const container = document.getElementById('app-content');
+    const scrollY   = container ? container.scrollTop : 0;
+    renderWizard();
+    if (container) container.scrollTop = scrollY;
+  }
 }
 
 /* Passo 4 — pesos e anulações */
