@@ -5,9 +5,941 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
 <title>Leitor de Gabaritos</title>
+<!-- build: v2 (Etapa 2 — CRUD Turmas, Alunos, Provas) -->
 
 <!-- Firebase Compat SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js">
+
+/* ════════════════════════════════════════════════════════════════
+   ETAPA 2 — CRUD Turmas, Alunos, Provas
+════════════════════════════════════════════════════════════════ */
+
+/* Refs Firestore */
+const ref = {
+  turmas:     () => db.collection('escolas').doc(app.escolaId).collection('turmas'),
+  alunos:     () => db.collection('escolas').doc(app.escolaId).collection('alunos'),
+  provas:     () => db.collection('escolas').doc(app.escolaId).collection('provas'),
+  resultados: () => db.collection('escolas').doc(app.escolaId).collection('resultados'),
+};
+
+/* Cache em memória para listas (evita re-fetch a cada navegação) */
+const cache = { turmas: null, alunos: null, provas: null };
+
+async function loadCache(force = false) {
+  if (!app.escolaId) return;
+  try {
+    const tasks = [];
+    if (force || !cache.turmas) tasks.push(ref.turmas().orderBy('nome').get().then(s => cache.turmas = s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    if (force || !cache.alunos) tasks.push(ref.alunos().orderBy('nome').get().then(s => cache.alunos = s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    if (force || !cache.provas) tasks.push(ref.provas().orderBy('criadoEm','desc').get().then(s => cache.provas = s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    await Promise.all(tasks);
+  } catch (e) {
+    console.warn('loadCache', e);
+    cache.turmas ??= []; cache.alunos ??= []; cache.provas ??= [];
+  }
+}
+
+function escapeHtml(s) {
+  return (s ?? '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function turmaNomeById(id) {
+  const t = cache.turmas?.find(x => x.id === id);
+  return t ? t.nome : '—';
+}
+
+/* ════════════════════════════════════════
+   VIEW: TURMAS
+═══════════════════════════════════════════ */
+function turmas() {
+  setTimeout(() => renderTurmas(), 0);
+  return `
+    <div class="view-header">
+      <div>
+        <h2>Turmas</h2>
+        <div class="view-header-sub" id="turmas-count">Carregando...</div>
+      </div>
+      <button class="btn-icon" onclick="openTurmaForm()">+</button>
+    </div>
+    <div id="turmas-list" class="list-wrap">
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+    </div>
+  `;
+}
+
+async function renderTurmas() {
+  await loadCache();
+  const list = document.getElementById('turmas-list');
+  const countEl = document.getElementById('turmas-count');
+  if (!list) return;
+  const arr = cache.turmas || [];
+  countEl.textContent = arr.length === 0 ? 'Nenhuma turma ainda' : `${arr.length} turma${arr.length>1?'s':''}`;
+  if (!arr.length) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">👥</div>
+        <div class="empty-title">Nenhuma turma cadastrada</div>
+        <div class="empty-sub">Crie a primeira turma para começar a vincular alunos e provas.</div>
+        <button class="btn btn-cyan" onclick="openTurmaForm()">+ Nova turma</button>
+      </div>`;
+    return;
+  }
+  list.innerHTML = arr.map(t => {
+    const nAlunos = (cache.alunos || []).filter(a => a.turmaId === t.id).length;
+    return `
+      <div class="list-card" onclick="abrirTurma('${t.id}')">
+        <div class="list-card-icon blue">${escapeHtml((t.nome||'?')[0])}</div>
+        <div class="list-card-body">
+          <div class="list-card-title">${escapeHtml(t.nome)}</div>
+          <div class="list-card-sub">${escapeHtml(t.turno||'')} · ${escapeHtml(t.anoLetivo||'')} · ${nAlunos} aluno${nAlunos===1?'':'s'}</div>
+        </div>
+        <div class="list-card-arrow">›</div>
+      </div>`;
+  }).join('');
+}
+
+function openTurmaForm(turma) {
+  const edit = !!turma;
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">${edit ? 'Editar turma' : 'Nova turma'}</div>
+    <div class="input-group">
+      <label class="input-label">Nome da turma</label>
+      <input class="input" id="t-nome" type="text" maxlength="40"
+             placeholder="Ex: 9º A" value="${edit ? escapeHtml(turma.nome) : ''}">
+    </div>
+    <div class="input-group">
+      <label class="input-label">Turno</label>
+      <div class="segmented" id="t-turno-seg">
+        ${['Manhã','Tarde','Noite','Integral'].map(o =>
+          `<div class="seg ${ (edit?turma.turno:'Manhã')===o ? 'active' : '' }" data-val="${o}" onclick="segPick(this)">${o}</div>`
+        ).join('')}
+      </div>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Ano letivo</label>
+      <input class="input" id="t-ano" type="text" maxlength="9"
+             placeholder="Ex: 2026" value="${edit ? escapeHtml(turma.anoLetivo) : String(new Date().getFullYear())}">
+    </div>
+    <div class="input-group">
+      <label class="input-label">Sistema de avaliação</label>
+      <div class="segmented" id="t-sistema-seg">
+        ${['Bimestral','Trimestral'].map(o =>
+          `<div class="seg ${ (edit?turma.sistema:'Bimestral')===o ? 'active' : '' }" data-val="${o}" onclick="segPick(this)">${o}</div>`
+        ).join('')}
+      </div>
+    </div>
+    <button class="btn btn-cyan" id="btn-save-turma" onclick="salvarTurma(${edit ? `'${turma.id}'` : 'null'})">
+      ${edit ? 'Salvar alterações' : 'Criar turma'}
+    </button>
+    ${ edit ? `<button class="btn btn-danger" onclick="excluirTurma('${turma.id}')">Excluir turma</button>` : '' }
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+function segPick(el) {
+  const parent = el.parentElement;
+  parent.querySelectorAll('.seg').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+}
+function segValue(id) {
+  const el = document.querySelector(`#${id} .seg.active`);
+  return el ? el.dataset.val : '';
+}
+
+async function salvarTurma(id) {
+  const nome = document.getElementById('t-nome').value.trim();
+  const ano  = document.getElementById('t-ano').value.trim();
+  if (!nome || !ano) return toast('Preencha nome e ano letivo', 'error');
+  setLoading('btn-save-turma', true);
+  try {
+    const data = {
+      nome, anoLetivo: ano,
+      turno:   segValue('t-turno-seg')   || 'Manhã',
+      sistema: segValue('t-sistema-seg') || 'Bimestral',
+      criadoPor: app.user.uid,
+    };
+    if (id) {
+      await ref.turmas().doc(id).update(data);
+      toast('Turma atualizada', 'success');
+    } else {
+      data.criadoEm = firebase.firestore.FieldValue.serverTimestamp();
+      await ref.turmas().add(data);
+      toast('Turma criada', 'success');
+    }
+    cache.turmas = null;
+    closeModal();
+    if (app.currentNav === 'turmas') renderTurmas();
+    if (app.currentNav === 'inicio') loadDashStats();
+  } catch (e) {
+    toast('Erro: ' + e.message, 'error');
+  } finally {
+    setLoading('btn-save-turma', false);
+  }
+}
+
+function excluirTurma(id) {
+  const turma = cache.turmas.find(t => t.id === id);
+  const nAlunos = (cache.alunos||[]).filter(a => a.turmaId === id).length;
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Excluir turma?</div>
+    <div style="font-size:14px;color:var(--text-muted);line-height:1.5;">
+      <strong style="color:var(--text)">${escapeHtml(turma?.nome||'')}</strong> será removida.
+      ${nAlunos>0 ? `<br><br>⚠️ Esta turma tem <strong>${nAlunos} aluno(s)</strong>. Eles continuarão cadastrados, mas ficarão sem turma.` : ''}
+    </div>
+    <button class="btn btn-danger" onclick="confirmaExcluirTurma('${id}')">Sim, excluir</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+async function confirmaExcluirTurma(id) {
+  try {
+    await ref.turmas().doc(id).delete();
+    cache.turmas = null;
+    toast('Turma excluída', 'success');
+    closeModal();
+    if (app.currentNav === 'turmas') renderTurmas();
+    if (app.currentNav === 'inicio') loadDashStats();
+  } catch (e) {
+    toast('Erro: ' + e.message, 'error');
+  }
+}
+
+/* Detalhe da turma */
+async function abrirTurma(id) {
+  await loadCache();
+  const t = cache.turmas.find(x => x.id === id);
+  if (!t) return;
+  const alunos = (cache.alunos||[]).filter(a => a.turmaId === id);
+  const content = document.getElementById('app-content');
+  content.scrollTop = 0;
+  content.innerHTML = `
+    <div class="detail-header">
+      <div class="back-btn" onclick="navTo('turmas')">‹</div>
+      <div class="detail-title">${escapeHtml(t.nome)}</div>
+      <button class="icon-btn" onclick='openTurmaForm(${JSON.stringify(t).replace(/"/g,"&quot;")})' title="Editar">✏️</button>
+    </div>
+    <div class="info-grid">
+      <div class="info-pill"><div class="info-pill-label">Turno</div><div class="info-pill-value">${escapeHtml(t.turno||'—')}</div></div>
+      <div class="info-pill"><div class="info-pill-label">Ano letivo</div><div class="info-pill-value">${escapeHtml(t.anoLetivo||'—')}</div></div>
+      <div class="info-pill"><div class="info-pill-label">Sistema</div><div class="info-pill-value">${escapeHtml(t.sistema||'—')}</div></div>
+      <div class="info-pill"><div class="info-pill-label">Alunos</div><div class="info-pill-value">${alunos.length}</div></div>
+    </div>
+    <div class="view-header" style="padding-top:6px">
+      <div><h2 style="font-size:16px">Alunos</h2></div>
+      <button class="btn-icon" onclick="openAlunoForm(null, '${id}')">+</button>
+    </div>
+    <div class="list-wrap" id="turma-alunos-list">
+      ${ alunos.length === 0
+          ? `<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-title">Nenhum aluno</div><div class="empty-sub">Adicione alunos individualmente ou por lista colada.</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+                <button class="btn btn-cyan" onclick="openAlunoForm(null,'${id}')">+ Aluno</button>
+                <button class="btn btn-ghost" onclick="openImportAlunos('${id}')">📋 Colar lista</button>
+              </div></div>`
+          : alunos.map(a => alunoRowHtml(a)).join('') + `
+              <button class="btn btn-ghost" style="margin-top:8px" onclick="openImportAlunos('${id}')">📋 Importar lista</button>
+            `
+      }
+    </div>
+  `;
+}
+
+function alunoRowHtml(a) {
+  return `
+    <div class="aluno-row">
+      <div class="aluno-avatar">${escapeHtml(initials(a.nome))}</div>
+      <div class="aluno-name">${escapeHtml(a.nome)}</div>
+      ${a.matricula ? `<span class="aluno-mat">${escapeHtml(a.matricula)}</span>` : ''}
+      <div class="aluno-actions">
+        <button class="icon-btn" onclick='openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'>✏️</button>
+        <button class="icon-btn danger" onclick="excluirAluno('${a.id}')">🗑️</button>
+      </div>
+    </div>`;
+}
+
+/* ════════════════════════════════════════
+   VIEW: ALUNOS (global, todos da escola)
+═══════════════════════════════════════════ */
+let alunosFiltroTurma = 'all';
+
+function alunos() {
+  setTimeout(() => renderAlunos(), 0);
+  return `
+    <div class="view-header">
+      <div>
+        <h2>Alunos</h2>
+        <div class="view-header-sub" id="alunos-count">Carregando...</div>
+      </div>
+      <button class="btn-icon" onclick="openAlunoForm()">+</button>
+    </div>
+    <div class="search-bar">
+      <input class="search-input" id="alunos-search" placeholder="Buscar aluno..." oninput="renderAlunos()">
+      <button class="btn-icon" style="background:var(--surface2);color:var(--text);box-shadow:none;border:1px solid var(--border)" onclick="openImportAlunos()">📋</button>
+    </div>
+    <div class="filter-chips" id="alunos-chips"></div>
+    <div id="alunos-list" class="list-wrap">
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+    </div>
+  `;
+}
+
+async function renderAlunos() {
+  await loadCache();
+  const chipsEl = document.getElementById('alunos-chips');
+  const listEl = document.getElementById('alunos-list');
+  const countEl = document.getElementById('alunos-count');
+  if (!chipsEl || !listEl) return;
+  // Chips de turma
+  const turmas = cache.turmas || [];
+  chipsEl.innerHTML = [
+    `<div class="chip ${alunosFiltroTurma==='all'?'active':''}" onclick="setAlunoFiltro('all')">Todas</div>`,
+    ...turmas.map(t => `<div class="chip ${alunosFiltroTurma===t.id?'active':''}" onclick="setAlunoFiltro('${t.id}')">${escapeHtml(t.nome)}</div>`),
+    `<div class="chip ${alunosFiltroTurma==='sem'?'active':''}" onclick="setAlunoFiltro('sem')">Sem turma</div>`
+  ].join('');
+  // Filtros
+  const search = (document.getElementById('alunos-search')?.value || '').toLowerCase().trim();
+  let arr = cache.alunos || [];
+  if (alunosFiltroTurma === 'sem')  arr = arr.filter(a => !a.turmaId);
+  else if (alunosFiltroTurma !== 'all') arr = arr.filter(a => a.turmaId === alunosFiltroTurma);
+  if (search) arr = arr.filter(a => (a.nome||'').toLowerCase().includes(search));
+  countEl.textContent = `${arr.length} aluno${arr.length===1?'':'s'}`;
+  if (!arr.length) {
+    listEl.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">👤</div>
+        <div class="empty-title">Nenhum aluno</div>
+        <div class="empty-sub">Cadastre alunos individualmente, importe uma lista colada, ou ajuste o filtro.</div>
+        <button class="btn btn-cyan" onclick="openAlunoForm()">+ Novo aluno</button>
+      </div>`;
+    return;
+  }
+  listEl.innerHTML = arr.map(a => `
+    <div class="aluno-row">
+      <div class="aluno-avatar">${escapeHtml(initials(a.nome))}</div>
+      <div style="flex:1;min-width:0">
+        <div class="aluno-name">${escapeHtml(a.nome)}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:1px">${escapeHtml(turmaNomeById(a.turmaId))}</div>
+      </div>
+      ${a.matricula ? `<span class="aluno-mat">${escapeHtml(a.matricula)}</span>` : ''}
+      <div class="aluno-actions">
+        <button class="icon-btn" onclick='openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'>✏️</button>
+        <button class="icon-btn danger" onclick="excluirAluno('${a.id}')">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+
+function setAlunoFiltro(v) { alunosFiltroTurma = v; renderAlunos(); }
+
+function openAlunoForm(aluno, defaultTurmaId) {
+  const edit = !!aluno;
+  const turmas = cache.turmas || [];
+  const turmaSel = edit ? aluno.turmaId : (defaultTurmaId || '');
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">${edit ? 'Editar aluno' : 'Novo aluno'}</div>
+    <div class="input-group">
+      <label class="input-label">Nome completo</label>
+      <input class="input" id="a-nome" type="text" maxlength="80"
+             placeholder="Ex: João Silva" value="${edit ? escapeHtml(aluno.nome) : ''}">
+    </div>
+    <div class="input-group">
+      <label class="input-label">Turma</label>
+      <select class="input" id="a-turma" style="cursor:pointer">
+        <option value="">— Sem turma —</option>
+        ${turmas.map(t => `<option value="${t.id}" ${t.id===turmaSel?'selected':''}>${escapeHtml(t.nome)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Matrícula <span style="color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0">(opcional)</span></label>
+      <input class="input" id="a-mat" type="text" maxlength="20"
+             placeholder="Ex: 2026001" value="${edit ? escapeHtml(aluno.matricula||'') : ''}">
+    </div>
+    <button class="btn btn-cyan" id="btn-save-aluno" onclick="salvarAluno(${edit ? `'${aluno.id}'` : 'null'})">
+      ${edit ? 'Salvar' : 'Cadastrar'}
+    </button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function salvarAluno(id) {
+  const nome = document.getElementById('a-nome').value.trim();
+  const turmaId = document.getElementById('a-turma').value || null;
+  const matricula = document.getElementById('a-mat').value.trim() || null;
+  if (!nome) return toast('Digite o nome', 'error');
+  setLoading('btn-save-aluno', true);
+  try {
+    const data = { nome, turmaId, matricula };
+    if (id) {
+      await ref.alunos().doc(id).update(data);
+      toast('Aluno atualizado', 'success');
+    } else {
+      data.criadoEm = firebase.firestore.FieldValue.serverTimestamp();
+      data.criadoPor = app.user.uid;
+      await ref.alunos().add(data);
+      toast('Aluno cadastrado', 'success');
+    }
+    cache.alunos = null;
+    closeModal();
+    refreshCurrentView();
+  } catch (e) { toast('Erro: '+e.message,'error'); }
+  finally { setLoading('btn-save-aluno', false); }
+}
+
+function excluirAluno(id) {
+  const a = cache.alunos.find(x => x.id === id);
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Excluir aluno?</div>
+    <div style="font-size:14px;color:var(--text-muted);line-height:1.5;">
+      <strong style="color:var(--text)">${escapeHtml(a?.nome||'')}</strong> e seus resultados não vinculados serão removidos do app.
+    </div>
+    <button class="btn btn-danger" onclick="confirmaExcluirAluno('${id}')">Sim, excluir</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+async function confirmaExcluirAluno(id) {
+  try {
+    await ref.alunos().doc(id).delete();
+    cache.alunos = null;
+    toast('Aluno excluído', 'success');
+    closeModal();
+    refreshCurrentView();
+  } catch (e) { toast('Erro: '+e.message,'error'); }
+}
+
+/* Importação em lote */
+function openImportAlunos(turmaId) {
+  const turmas = cache.turmas || [];
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Importar alunos</div>
+    <div style="font-size:13px;color:var(--text-muted);line-height:1.5;">
+      Cole uma lista — <strong style="color:var(--text)">um aluno por linha</strong>.
+      Aceita <code style="color:var(--cyan);font-family:var(--mono)">Nome</code> ou
+      <code style="color:var(--cyan);font-family:var(--mono)">Nome;Matrícula</code>.
+    </div>
+    <div class="input-group">
+      <label class="input-label">Turma de destino</label>
+      <select class="input" id="i-turma" style="cursor:pointer">
+        <option value="">— Sem turma —</option>
+        ${turmas.map(t => `<option value="${t.id}" ${t.id===turmaId?'selected':''}>${escapeHtml(t.nome)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Lista</label>
+      <textarea class="textarea" id="i-lista" placeholder="João Silva&#10;Maria Souza;2026002&#10;Pedro Lima"></textarea>
+    </div>
+    <button class="btn btn-cyan" id="btn-import" onclick="executarImport()">Importar</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function executarImport() {
+  const turmaId = document.getElementById('i-turma').value || null;
+  const txt = document.getElementById('i-lista').value;
+  const linhas = txt.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!linhas.length) return toast('Cole pelo menos um nome', 'error');
+  setLoading('btn-import', true);
+  try {
+    const batch = db.batch();
+    const col = ref.alunos();
+    let n = 0;
+    linhas.forEach(linha => {
+      const partes = linha.split(';').map(p => p.trim());
+      const nome = partes[0];
+      const matricula = partes[1] || null;
+      if (!nome) return;
+      const r = col.doc();
+      batch.set(r, {
+        nome, matricula, turmaId,
+        criadoPor: app.user.uid,
+        criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      n++;
+    });
+    await batch.commit();
+    cache.alunos = null;
+    toast(`${n} aluno(s) importado(s)`, 'success');
+    closeModal();
+    refreshCurrentView();
+  } catch (e) { toast('Erro: '+e.message,'error'); }
+  finally { setLoading('btn-import', false); }
+}
+
+function refreshCurrentView() {
+  if (app.currentNav === 'alunos') renderAlunos();
+  else if (app.currentNav === 'turmas') renderTurmas();
+  else if (app.currentNav === 'provas') renderProvas();
+  else if (app.currentNav === 'inicio') loadDashStats();
+  // Detalhe de turma (não está em currentNav)
+  if (document.querySelector('.detail-header') && _detalheTurmaId) abrirTurma(_detalheTurmaId);
+}
+let _detalheTurmaId = null;
+const _origAbrirTurma = abrirTurma;
+abrirTurma = async function(id) { _detalheTurmaId = id; return _origAbrirTurma(id); };
+
+/* ════════════════════════════════════════
+   VIEW: PROVAS
+═══════════════════════════════════════════ */
+function provas() {
+  setTimeout(() => renderProvas(), 0);
+  return `
+    <div class="view-header">
+      <div>
+        <h2>Provas</h2>
+        <div class="view-header-sub" id="provas-count">Carregando...</div>
+      </div>
+      <button class="btn-icon" onclick="iniciarWizardProva()">+</button>
+    </div>
+    <div id="provas-list" class="list-wrap">
+      <div class="skel skel-card"></div>
+      <div class="skel skel-card"></div>
+    </div>
+  `;
+}
+
+async function renderProvas() {
+  await loadCache();
+  const list = document.getElementById('provas-list');
+  const countEl = document.getElementById('provas-count');
+  if (!list) return;
+  const arr = cache.provas || [];
+  countEl.textContent = arr.length === 0 ? 'Nenhuma prova ainda' : `${arr.length} prova${arr.length>1?'s':''}`;
+  if (!arr.length) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📋</div>
+        <div class="empty-title">Nenhuma prova criada</div>
+        <div class="empty-sub">Crie sua primeira prova: defina o gabarito, gere o cartão-resposta e corrija com a câmera.</div>
+        <button class="btn btn-cyan" onclick="iniciarWizardProva()">+ Nova prova</button>
+      </div>`;
+    return;
+  }
+  list.innerHTML = arr.map(p => {
+    const turmaNome = turmaNomeById(p.turmaId);
+    return `
+      <div class="list-card" onclick="abrirProva('${p.id}')">
+        <div class="list-card-icon yellow">📋</div>
+        <div class="list-card-body">
+          <div class="list-card-title">${escapeHtml(p.nome)}</div>
+          <div class="list-card-sub">${escapeHtml(p.disciplina||'')} · ${escapeHtml(turmaNome)} · ${p.numQuestoes||'?'} questões</div>
+        </div>
+        <div class="list-card-arrow">›</div>
+      </div>`;
+  }).join('');
+}
+
+/* ──────────── WIZARD DE PROVA (4 passos) ──────────── */
+const wizard = {
+  step: 1,
+  data: {}, // dados acumulados
+  editId: null,
+};
+
+function iniciarWizardProva() {
+  wizard.step = 1;
+  wizard.editId = null;
+  const anoAtual = new Date().getFullYear();
+  wizard.data = {
+    nome: '', disciplina: '', turmaId: '',
+    bimestre: '1', anoLetivo: String(anoAtual),
+    numQuestoes: 10,
+    numAlternativas: 5, // A–E
+    gabarito: {},       // { 1:'A', 2:'C', ... }
+    pesos: {},          // { 1:1.0, ... }
+    anuladas: {},       // { 5:true, ... }
+  };
+  renderWizard();
+}
+
+function renderWizard() {
+  const content = document.getElementById('app-content');
+  content.scrollTop = 0;
+  const steps = [wizardStep1, wizardStep2, wizardStep3, wizardStep4];
+  const dots = [1,2,3,4].map(i => {
+    if (i < wizard.step) return '<div class="done"></div>';
+    if (i === wizard.step) return '<div class="active"></div>';
+    return '<div></div>';
+  }).join('');
+  content.innerHTML = `
+    <div class="detail-header">
+      <div class="back-btn" onclick="${wizard.step===1?"navTo('provas')":'wizardBack()'}">‹</div>
+      <div class="detail-title">${wizard.editId?'Editar prova':'Nova prova'}</div>
+      <div style="font-size:12px;color:var(--text-muted);font-weight:600">${wizard.step}/4</div>
+    </div>
+    <div class="wizard-progress">${dots}</div>
+    ${ steps[wizard.step-1]() }
+  `;
+}
+
+function wizardBack() { if (wizard.step>1) { wizard.step--; renderWizard(); } }
+function wizardNext() { if (wizard.step<4) { wizard.step++; renderWizard(); } }
+
+/* Passo 1 — dados básicos */
+function wizardStep1() {
+  const d = wizard.data;
+  const turmas = cache.turmas || [];
+  return `
+    <div class="wizard-step-label">Passo 1 de 4</div>
+    <div class="wizard-step-title">Dados básicos</div>
+    <div class="wizard-step-sub">Informações de identificação da prova.</div>
+    <div class="wizard-body">
+      <div class="input-group">
+        <label class="input-label">Nome da prova</label>
+        <input class="input" id="w-nome" type="text" maxlength="60"
+               placeholder="Ex: Prova 1 — Funções" value="${escapeHtml(d.nome)}"
+               oninput="wizard.data.nome=this.value; w1Check()">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Disciplina</label>
+        <input class="input" id="w-disc" type="text" maxlength="40"
+               placeholder="Ex: Matemática" value="${escapeHtml(d.disciplina)}"
+               oninput="wizard.data.disciplina=this.value; w1Check()">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Turma</label>
+        <select class="input" id="w-turma" style="cursor:pointer" onchange="wizard.data.turmaId=this.value; w1Check()">
+          <option value="">— Selecione —</option>
+          ${turmas.map(t => `<option value="${t.id}" ${t.id===d.turmaId?'selected':''}>${escapeHtml(t.nome)}</option>`).join('')}
+        </select>
+        ${turmas.length===0 ? '<div style="font-size:12px;color:var(--yellow);margin-top:4px">⚠️ Crie uma turma primeiro</div>' : ''}
+      </div>
+      <div class="input-group">
+        <label class="input-label">Unidade letiva</label>
+        <div class="segmented" id="w-bim-seg">
+          ${['1','2','3','4'].map(o => `<div class="seg ${d.bimestre===o?'active':''}" data-val="${o}" onclick="segPick(this); wizard.data.bimestre=this.dataset.val">${o}ª</div>`).join('')}
+        </div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">Ano letivo</label>
+        <input class="input" id="w-ano" type="text" maxlength="9"
+               placeholder="2026" value="${escapeHtml(d.anoLetivo)}"
+               oninput="wizard.data.anoLetivo=this.value">
+      </div>
+    </div>
+    <div class="wizard-footer">
+      <button class="btn btn-ghost" onclick="navTo('provas')">Cancelar</button>
+      <button class="btn btn-cyan" id="btn-w-next" onclick="wizardNext()" ${ (d.nome&&d.disciplina&&d.turmaId) ? '' : 'disabled' }>Próximo →</button>
+    </div>
+  `;
+}
+function w1Check() {
+  const d = wizard.data;
+  const btn = document.getElementById('btn-w-next');
+  if (btn) btn.disabled = !(d.nome.trim() && d.disciplina.trim() && d.turmaId);
+}
+
+/* Passo 2 — configuração */
+function wizardStep2() {
+  const d = wizard.data;
+  return `
+    <div class="wizard-step-label">Passo 2 de 4</div>
+    <div class="wizard-step-title">Configuração</div>
+    <div class="wizard-step-sub">Defina quantas questões e quantas alternativas por questão.</div>
+    <div class="wizard-body">
+      <div class="input-group">
+        <label class="input-label">Número de questões</label>
+        <input class="input" id="w-nq" type="number" min="1" max="100" inputmode="numeric"
+               value="${d.numQuestoes}" oninput="wizard.data.numQuestoes=Math.max(1,Math.min(100,parseInt(this.value)||1))">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Alternativas por questão</label>
+        <div class="segmented" id="w-alt-seg">
+          ${[3,4,5].map(n => `<div class="seg ${d.numAlternativas===n?'active':''}" data-val="${n}" onclick="segPick(this); wizard.data.numAlternativas=parseInt(this.dataset.val)">A–${'ABCDE'[n-1]}</div>`).join('')}
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.5">
+          3 = A, B, C · 4 = A–D · 5 = A–E
+        </div>
+      </div>
+      <div class="card" style="background:rgba(0,180,216,0.06);border-color:rgba(0,180,216,0.2)">
+        <div style="font-size:13px;color:var(--text-muted);line-height:1.6">
+          💡 No próximo passo você marca a alternativa correta de cada questão.
+          Você pode mudar tudo depois.
+        </div>
+      </div>
+    </div>
+    <div class="wizard-footer">
+      <button class="btn btn-ghost" onclick="wizardBack()">← Voltar</button>
+      <button class="btn btn-cyan" onclick="wizardGoStep3()">Próximo →</button>
+    </div>
+  `;
+}
+function wizardGoStep3() {
+  // Inicializa gabarito (se ainda não tem ou tamanho mudou)
+  const d = wizard.data;
+  const novo = {};
+  for (let q=1; q<=d.numQuestoes; q++) novo[q] = d.gabarito[q] || '';
+  d.gabarito = novo;
+  wizardNext();
+}
+
+/* Passo 3 — gabarito clicável */
+function wizardStep3() {
+  const d = wizard.data;
+  const letras = 'ABCDE'.slice(0, d.numAlternativas).split('');
+  const total = d.numQuestoes;
+  const marcadas = Object.values(d.gabarito).filter(Boolean).length;
+  let rows = '';
+  for (let q=1; q<=total; q++) {
+    rows += `<div class="gab-row">
+      <div class="gab-q-num">${q}.</div>
+      <div class="gab-options">
+        ${letras.map(L => `<div class="gab-bubble ${d.gabarito[q]===L?'selected':''}" onclick="marcarGab(${q},'${L}')">${L}</div>`).join('')}
+      </div>
+    </div>`;
+  }
+  return `
+    <div class="wizard-step-label">Passo 3 de 4</div>
+    <div class="wizard-step-title">Gabarito</div>
+    <div class="wizard-step-sub">
+      Marque a alternativa correta de cada questão. <strong style="color:var(--cyan)">${marcadas}/${total}</strong> marcadas.
+    </div>
+    <div class="wizard-body">
+      <div class="gab-list">${rows}</div>
+    </div>
+    <div class="wizard-footer">
+      <button class="btn btn-ghost" onclick="wizardBack()">← Voltar</button>
+      <button class="btn btn-cyan" onclick="wizardGoStep4()" ${ marcadas<total ? 'disabled' : '' }>Próximo →</button>
+    </div>
+  `;
+}
+function marcarGab(q, L) {
+  wizard.data.gabarito[q] = L;
+  // re-render só o passo 3 (mais simples: rerender wizard)
+  renderWizard();
+}
+
+/* Passo 4 — pesos e anulações */
+function wizardGoStep4() {
+  const d = wizard.data;
+  for (let q=1; q<=d.numQuestoes; q++) {
+    if (d.pesos[q] === undefined) d.pesos[q] = 1;
+  }
+  wizardNext();
+}
+function wizardStep4() {
+  const d = wizard.data;
+  const total = d.numQuestoes;
+  const ativas = Object.entries(d.anuladas).filter(([,v])=>v).length;
+  const somaPesos = Object.entries(d.pesos)
+    .filter(([q]) => !d.anuladas[q])
+    .reduce((acc,[,p]) => acc + (parseFloat(p)||0), 0);
+  let rows = '';
+  for (let q=1; q<=total; q++) {
+    const anul = !!d.anuladas[q];
+    rows += `<div class="peso-row ${anul?'anulada':''}">
+      <div class="peso-q">${q}.</div>
+      <div class="peso-correct">${anul ? '⊘' : d.gabarito[q]||'?'}</div>
+      <input class="peso-input" type="number" step="0.5" min="0" max="10"
+             value="${d.pesos[q]??1}" ${anul?'disabled':''}
+             oninput="wizard.data.pesos[${q}]=parseFloat(this.value)||0; w4Resume()">
+      <button class="peso-anular" onclick="toggleAnular(${q})">${anul?'Anulada':'Anular'}</button>
+    </div>`;
+  }
+  return `
+    <div class="wizard-step-label">Passo 4 de 4</div>
+    <div class="wizard-step-title">Pesos e anulações</div>
+    <div class="wizard-step-sub">
+      Ajuste o peso de cada questão (padrão 1.0). Questões anuladas valem para todos os alunos.
+    </div>
+    <div class="wizard-body">
+      <div class="wizard-resume" id="w4-resume">
+        <div class="wizard-resume-row"><span>Total de questões válidas</span><span>${total - ativas}</span></div>
+        <div class="wizard-resume-row"><span>Soma dos pesos</span><span>${somaPesos.toFixed(2)}</span></div>
+        <div class="wizard-resume-row"><span>Anuladas</span><span>${ativas}</span></div>
+      </div>
+      ${rows}
+    </div>
+    <div class="wizard-footer">
+      <button class="btn btn-ghost" onclick="wizardBack()">← Voltar</button>
+      <button class="btn btn-cyan" id="btn-w-save" onclick="salvarProva()">${wizard.editId?'Salvar':'Criar prova'}</button>
+    </div>
+  `;
+}
+function w4Resume() {
+  const d = wizard.data;
+  const total = d.numQuestoes;
+  const ativas = Object.entries(d.anuladas).filter(([,v])=>v).length;
+  const somaPesos = Object.entries(d.pesos).filter(([q]) => !d.anuladas[q])
+    .reduce((acc,[,p]) => acc + (parseFloat(p)||0), 0);
+  const el = document.getElementById('w4-resume');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="wizard-resume-row"><span>Total de questões válidas</span><span>${total - ativas}</span></div>
+    <div class="wizard-resume-row"><span>Soma dos pesos</span><span>${somaPesos.toFixed(2)}</span></div>
+    <div class="wizard-resume-row"><span>Anuladas</span><span>${ativas}</span></div>
+  `;
+}
+function toggleAnular(q) {
+  wizard.data.anuladas[q] = !wizard.data.anuladas[q];
+  renderWizard();
+}
+
+async function salvarProva() {
+  const d = wizard.data;
+  setLoading('btn-w-save', true);
+  try {
+    const payload = {
+      nome: d.nome.trim(),
+      disciplina: d.disciplina.trim(),
+      turmaId: d.turmaId,
+      bimestre: d.bimestre,
+      anoLetivo: d.anoLetivo.trim(),
+      numQuestoes: d.numQuestoes,
+      numAlternativas: d.numAlternativas,
+      gabarito: d.gabarito,
+      pesos: d.pesos,
+      anuladas: d.anuladas,
+      criadoPor: app.user.uid,
+    };
+    if (wizard.editId) {
+      await ref.provas().doc(wizard.editId).update(payload);
+      toast('Prova atualizada', 'success');
+    } else {
+      payload.criadoEm = firebase.firestore.FieldValue.serverTimestamp();
+      const docRef = await ref.provas().add(payload);
+      wizard.editId = docRef.id;
+      toast('Prova criada', 'success');
+    }
+    cache.provas = null;
+    navTo('provas');
+  } catch (e) { toast('Erro: '+e.message,'error'); }
+  finally { setLoading('btn-w-save', false); }
+}
+
+/* Detalhe da prova */
+async function abrirProva(id) {
+  await loadCache();
+  const p = cache.provas.find(x => x.id === id);
+  if (!p) return;
+  const content = document.getElementById('app-content');
+  content.scrollTop = 0;
+  const turmaNome = turmaNomeById(p.turmaId);
+  const validas = p.numQuestoes - Object.values(p.anuladas||{}).filter(Boolean).length;
+  const somaPesos = Object.entries(p.pesos||{}).filter(([q]) => !p.anuladas?.[q])
+    .reduce((acc,[,v]) => acc + (parseFloat(v)||0), 0);
+  content.innerHTML = `
+    <div class="detail-header">
+      <div class="back-btn" onclick="navTo('provas')">‹</div>
+      <div class="detail-title">${escapeHtml(p.nome)}</div>
+      <button class="icon-btn" onclick="editarProva('${p.id}')" title="Editar">✏️</button>
+    </div>
+    <div style="padding:0 16px 10px"><span class="badge badge-cyan">${escapeHtml(p.disciplina||'')}</span> <span class="badge badge-blue">${escapeHtml(turmaNome)}</span> <span class="badge badge-yellow">${escapeHtml(p.bimestre||'1')}ª unidade</span></div>
+    <div class="info-grid">
+      <div class="info-pill"><div class="info-pill-label">Questões</div><div class="info-pill-value">${p.numQuestoes}</div></div>
+      <div class="info-pill"><div class="info-pill-label">Alternativas</div><div class="info-pill-value">A–${'ABCDE'[(p.numAlternativas||5)-1]}</div></div>
+      <div class="info-pill"><div class="info-pill-label">Válidas</div><div class="info-pill-value">${validas}</div></div>
+      <div class="info-pill"><div class="info-pill-label">Soma pesos</div><div class="info-pill-value">${somaPesos.toFixed(2)}</div></div>
+    </div>
+
+    <div class="dash-quick-actions" style="padding:0 16px 16px">
+      <div class="quick-action" onclick="toast('Disponível na Etapa 3','')">
+        <div class="quick-action-icon yellow">📄</div>
+        <div class="quick-action-text">
+          <div class="quick-action-title">Gerar cartão-resposta</div>
+          <div class="quick-action-sub">PDF imprimível com QR Code</div>
+        </div>
+        <div class="quick-action-arrow">›</div>
+      </div>
+      <div class="quick-action" onclick="toast('Disponível na Etapa 4','')">
+        <div class="quick-action-icon green">📷</div>
+        <div class="quick-action-text">
+          <div class="quick-action-title">Corrigir prova</div>
+          <div class="quick-action-sub">Fotografar cartão preenchido</div>
+        </div>
+        <div class="quick-action-arrow">›</div>
+      </div>
+      <div class="quick-action" onclick="toast('Disponível na Etapa 5','')">
+        <div class="quick-action-icon blue">📊</div>
+        <div class="quick-action-text">
+          <div class="quick-action-title">Ver resultados</div>
+          <div class="quick-action-sub">Notas e correções dos alunos</div>
+        </div>
+        <div class="quick-action-arrow">›</div>
+      </div>
+    </div>
+
+    <div class="dash-section-title">Gabarito</div>
+    <div style="padding:0 16px 16px">
+      <div class="gab-list">
+        ${ (() => {
+          let html = '';
+          const letras = 'ABCDE'.slice(0, p.numAlternativas).split('');
+          for (let q=1; q<=p.numQuestoes; q++) {
+            const correta = p.gabarito?.[q];
+            const anul = p.anuladas?.[q];
+            html += `<div class="gab-row">
+              <div class="gab-q-num">${q}.</div>
+              <div class="gab-options">
+                ${letras.map(L => `<div class="gab-bubble ${correta===L && !anul ?'selected':''}" style="cursor:default">${L}</div>`).join('')}
+              </div>
+              ${ anul ? '<span class="badge badge-yellow" style="margin-left:8px">Anulada</span>' : `<span style="font-family:var(--mono);font-size:11px;color:var(--text-muted);margin-left:8px">×${(p.pesos?.[q]||1)}</span>` }
+            </div>`;
+          }
+          return html;
+        })() }
+      </div>
+    </div>
+
+    <div style="padding:0 16px 24px">
+      <button class="btn btn-danger" onclick="excluirProva('${p.id}')">Excluir prova</button>
+    </div>
+  `;
+}
+
+function editarProva(id) {
+  const p = cache.provas.find(x => x.id === id);
+  if (!p) return;
+  wizard.step = 1;
+  wizard.editId = id;
+  wizard.data = {
+    nome: p.nome || '',
+    disciplina: p.disciplina || '',
+    turmaId: p.turmaId || '',
+    bimestre: p.bimestre || '1',
+    anoLetivo: p.anoLetivo || String(new Date().getFullYear()),
+    numQuestoes: p.numQuestoes || 10,
+    numAlternativas: p.numAlternativas || 5,
+    gabarito: { ...(p.gabarito || {}) },
+    pesos:    { ...(p.pesos    || {}) },
+    anuladas: { ...(p.anuladas || {}) },
+  };
+  renderWizard();
+}
+
+function excluirProva(id) {
+  const p = cache.provas.find(x => x.id === id);
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Excluir prova?</div>
+    <div style="font-size:14px;color:var(--text-muted);line-height:1.5;">
+      <strong style="color:var(--text)">${escapeHtml(p?.nome||'')}</strong> e todos os seus resultados serão removidos. Esta ação não pode ser desfeita.
+    </div>
+    <button class="btn btn-danger" onclick="confirmaExcluirProva('${id}')">Sim, excluir</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+async function confirmaExcluirProva(id) {
+  try {
+    await ref.provas().doc(id).delete();
+    cache.provas = null;
+    closeModal();
+    toast('Prova excluída', 'success');
+    navTo('provas');
+  } catch (e) { toast('Erro: '+e.message,'error'); }
+}
+
+/* Limpa o cache ao trocar de escola (sign out) */
+const _origSignOut = signOut;
+signOut = async function() {
+  cache.turmas = cache.alunos = cache.provas = null;
+  return _origSignOut();
+};
+
+</script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
@@ -728,6 +1660,327 @@ html, body {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ═══════════════════════════════════════════════
+   ETAPA 2 — CRUD Turmas, Alunos, Provas
+═══════════════════════════════════════════════ */
+
+/* Cabeçalho de view com título + botão */
+.view-header {
+  padding: 20px 20px 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.view-header h2 {
+  font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: var(--text);
+}
+.view-header-sub {
+  font-size: 12px; color: var(--text-muted); margin-top: 2px;
+}
+.btn-icon {
+  width: 40px; height: 40px; border-radius: 12px;
+  background: var(--cyan); color: var(--navy);
+  display: flex; align-items: center; justify-content: center;
+  border: none; cursor: pointer; font-size: 22px; font-weight: 700;
+  box-shadow: var(--glow-cyan); flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .15s;
+}
+.btn-icon:active { transform: scale(0.92); }
+
+/* FAB (alternativo, não usado por ora — mantemos botão no header) */
+
+/* Search / filter bar */
+.search-bar {
+  padding: 0 16px 12px;
+  display: flex; gap: 8px;
+}
+.search-input {
+  flex: 1;
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: var(--r-md); padding: 10px 14px;
+  color: var(--text); font-family: var(--font); font-size: 14px;
+  outline: none; transition: border-color .2s;
+}
+.search-input:focus { border-color: var(--cyan); }
+.search-input::placeholder { color: var(--text-dim); }
+
+.filter-chips {
+  display: flex; gap: 8px; padding: 0 16px 12px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.filter-chips::-webkit-scrollbar { display: none; }
+.chip {
+  padding: 7px 14px; border-radius: var(--r-full);
+  background: var(--surface2); border: 1px solid var(--border2);
+  font-size: 12px; font-weight: 600; color: var(--text-muted);
+  white-space: nowrap; cursor: pointer; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: all .15s;
+}
+.chip.active {
+  background: rgba(0,180,216,0.15); border-color: var(--cyan); color: var(--cyan);
+}
+
+/* Lista de cards (turmas / alunos / provas) */
+.list-wrap { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.list-card {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--r-lg); padding: 14px 16px;
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+  transition: all .15s; -webkit-tap-highlight-color: transparent;
+}
+.list-card:active { transform: scale(0.99); background: var(--surface2); }
+.list-card-icon {
+  width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700;
+}
+.list-card-icon.blue   { background: rgba(26,86,160,0.25);  color: #6BAEFF; }
+.list-card-icon.cyan   { background: rgba(0,180,216,0.18);  color: var(--cyan); }
+.list-card-icon.yellow { background: rgba(245,166,35,0.18); color: var(--yellow); }
+.list-card-icon.purple { background: rgba(140,100,220,0.20); color: #B69BFF; }
+.list-card-body { flex: 1; min-width: 0; }
+.list-card-title {
+  font-size: 15px; font-weight: 700; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.list-card-sub {
+  font-size: 12px; color: var(--text-muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.list-card-arrow { color: var(--text-dim); font-size: 22px; flex-shrink: 0; }
+
+/* Estado vazio */
+.empty-state {
+  padding: 48px 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  text-align: center;
+}
+.empty-icon {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: var(--surface2); display: flex; align-items: center; justify-content: center;
+  font-size: 32px; opacity: 0.7;
+}
+.empty-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.empty-sub   {
+  font-size: 13px; color: var(--text-muted); line-height: 1.5;
+  max-width: 260px;
+}
+.empty-state .btn { width: auto; padding: 10px 22px; margin-top: 8px; }
+
+/* Skeleton */
+.skel {
+  background: linear-gradient(90deg, var(--surface2) 0%, var(--surface3) 50%, var(--surface2) 100%);
+  background-size: 200% 100%; animation: skel 1.4s linear infinite;
+  border-radius: var(--r-md);
+}
+@keyframes skel { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.skel-card { height: 70px; margin-bottom: 10px; }
+
+/* Modal-form (modal mais alto, com formulários) */
+.modal-form { gap: 14px; }
+.modal-form .input-group + .input-group { margin-top: 0; }
+
+/* Segmented control (turno, bimestral/trimestral, qtd alternativas) */
+.segmented {
+  display: flex; background: var(--surface2);
+  border: 1px solid var(--border2); border-radius: var(--r-md);
+  padding: 3px; gap: 3px;
+}
+.seg {
+  flex: 1; padding: 9px 8px; border-radius: 8px;
+  font-size: 13px; font-weight: 600; color: var(--text-muted);
+  text-align: center; cursor: pointer; transition: all .15s;
+  -webkit-tap-highlight-color: transparent; user-select: none;
+}
+.seg.active { background: var(--blue); color: #fff; box-shadow: var(--shadow-sm); }
+
+/* Detalhe da prova / turma — header com botão voltar */
+.detail-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px 8px;
+}
+.back-btn {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text); font-size: 18px; cursor: pointer; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.back-btn:active { background: var(--surface3); }
+.detail-title { font-size: 18px; font-weight: 800; color: var(--text); flex: 1; }
+
+/* Info grid (no detalhe) */
+.info-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  padding: 0 16px 14px;
+}
+.info-pill {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--r-md); padding: 10px 12px;
+}
+.info-pill-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.info-pill-value {
+  font-size: 14px; font-weight: 700; color: var(--text); margin-top: 2px;
+}
+
+/* ─── Wizard de prova ─── */
+.wizard-progress {
+  display: flex; gap: 4px; padding: 0 16px 14px;
+}
+.wizard-progress > div {
+  flex: 1; height: 4px; border-radius: 2px; background: var(--border2);
+  transition: background .2s;
+}
+.wizard-progress > div.done   { background: var(--cyan); }
+.wizard-progress > div.active { background: var(--cyan); box-shadow: var(--glow-cyan); }
+
+.wizard-body {
+  padding: 4px 16px 16px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.wizard-step-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--cyan); padding: 0 16px;
+}
+.wizard-step-title {
+  font-size: 20px; font-weight: 800; color: var(--text); padding: 2px 16px 0;
+  letter-spacing: -0.02em;
+}
+.wizard-step-sub {
+  font-size: 13px; color: var(--text-muted); line-height: 1.5;
+  padding: 0 16px 8px;
+}
+.wizard-footer {
+  padding: 14px 16px calc(14px + var(--safe-bottom));
+  display: flex; gap: 10px;
+  background: var(--surface);
+  border-top: 1px solid var(--border2);
+  position: sticky; bottom: 0;
+}
+.wizard-footer .btn { flex: 1; }
+
+/* ─── Grade de gabarito (passo 3) ─── */
+.gab-list {
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--r-lg); padding: 10px;
+}
+.gab-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 4px;
+}
+.gab-q-num {
+  width: 30px; font-family: var(--mono); font-size: 13px; font-weight: 700;
+  color: var(--text-muted); text-align: right; flex-shrink: 0;
+}
+.gab-options {
+  display: flex; gap: 6px; flex: 1;
+}
+.gab-bubble {
+  flex: 1; aspect-ratio: 1; max-width: 42px;
+  border-radius: 50%; border: 2px solid var(--border);
+  background: transparent;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: var(--text-muted);
+  cursor: pointer; transition: all .12s;
+  -webkit-tap-highlight-color: transparent; user-select: none;
+}
+.gab-bubble:active { transform: scale(0.9); }
+.gab-bubble.selected {
+  background: var(--cyan); border-color: var(--cyan); color: var(--navy);
+  box-shadow: var(--glow-cyan);
+}
+
+/* Passo 4 — pesos e anulações */
+.peso-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; background: var(--surface);
+  border: 1px solid var(--border2); border-radius: var(--r-md);
+}
+.peso-row.anulada {
+  background: rgba(245,166,35,0.07); border-color: rgba(245,166,35,0.3);
+}
+.peso-q { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--text); width: 32px; }
+.peso-correct {
+  font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--cyan);
+  background: rgba(0,180,216,0.1); border-radius: 6px; padding: 2px 8px; min-width: 28px; text-align: center;
+}
+.peso-row.anulada .peso-correct { color: var(--yellow); background: rgba(245,166,35,0.12); }
+.peso-input {
+  width: 64px; padding: 7px 8px; text-align: center;
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: var(--mono);
+  font-size: 14px; font-weight: 700; outline: none;
+}
+.peso-input:focus { border-color: var(--cyan); }
+.peso-anular {
+  margin-left: auto;
+  padding: 6px 12px; border-radius: var(--r-full);
+  background: transparent; border: 1.5px solid var(--border);
+  color: var(--text-muted); font-size: 11px; font-weight: 700;
+  cursor: pointer; transition: all .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.peso-anular:active { transform: scale(0.94); }
+.peso-row.anulada .peso-anular {
+  background: var(--yellow); border-color: var(--yellow); color: var(--navy);
+}
+
+/* Resumo no fim do wizard */
+.wizard-resume {
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--r-lg); padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.wizard-resume-row { display: flex; justify-content: space-between; font-size: 13px; }
+.wizard-resume-row span:first-child { color: var(--text-muted); }
+.wizard-resume-row span:last-child  { color: var(--text); font-weight: 700; }
+
+/* Importação em lote — textarea */
+.textarea {
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: var(--r-md); padding: 12px 14px;
+  color: var(--text); font-family: var(--font); font-size: 14px;
+  width: 100%; min-height: 160px; resize: vertical; outline: none;
+  font-family: var(--mono); line-height: 1.6;
+}
+.textarea:focus { border-color: var(--cyan); }
+
+/* Itens de aluno — mais compacto */
+.aluno-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; background: var(--surface);
+  border: 1px solid var(--border2); border-radius: var(--r-md);
+}
+.aluno-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--surface2); display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: var(--cyan); flex-shrink: 0;
+}
+.aluno-name {
+  flex: 1; font-size: 14px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.aluno-mat {
+  font-family: var(--mono); font-size: 11px; color: var(--text-muted);
+  background: var(--surface2); padding: 2px 8px; border-radius: 6px;
+}
+.aluno-actions { display: flex; gap: 4px; }
+.icon-btn {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: transparent; border: none; color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 15px;
+  -webkit-tap-highlight-color: transparent;
+}
+.icon-btn:active { background: var(--surface2); }
+.icon-btn.danger:active { color: var(--red); }
+
 </style>
 </head>
 <body>
@@ -1469,33 +2722,6 @@ function inicio() {
   </div>`;
 }
 
-/* ══════════════
-   VIEWS PLACEHOLDER
-══════════════ */
-function provas() {
-  return `<div class="placeholder-view">
-    <div class="placeholder-icon">📋</div>
-    <div class="placeholder-title">Provas</div>
-    <div class="placeholder-sub">Crie provas com gabarito, gere cartões-resposta e corrija com a câmera.<br><br><em style="color:var(--text-dim);font-size:12px">Disponível na Etapa 2</em></div>
-  </div>`;
-}
-
-function turmas() {
-  return `<div class="placeholder-view">
-    <div class="placeholder-icon">👥</div>
-    <div class="placeholder-title">Turmas</div>
-    <div class="placeholder-sub">Organize as turmas e alunos da escola para vincular às provas.<br><br><em style="color:var(--text-dim);font-size:12px">Disponível na Etapa 2</em></div>
-  </div>`;
-}
-
-function alunos() {
-  return `<div class="placeholder-view">
-    <div class="placeholder-icon">👤</div>
-    <div class="placeholder-title">Alunos</div>
-    <div class="placeholder-sub">Veja todos os alunos da escola e seus resultados por prova.<br><br><em style="color:var(--text-dim);font-size:12px">Disponível na Etapa 2</em></div>
-  </div>`;
-}
-
 function mais() {
   const u = app.user;
   const p = app.professor;
@@ -1558,7 +2784,7 @@ function mais() {
   </div>
 
   <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:11px;">
-    Leitor de Gabaritos v1.0 · Etapa 1
+    Leitor de Gabaritos v2.0 · Etapa 2
   </div>`;
 }
 
