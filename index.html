@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
 <title>Leitor de Gabaritos</title>
-<!-- build: v6 (Etapa 6 — Relatório Pedagógico) -->
+<!-- build: v7 (Pré-Etapa 7 — Disciplinas do Professor + Avaliação Multidisciplinar) -->
 
 <!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -41,7 +41,12 @@ async function loadCache(force = false) {
             // Gestor: vê provas da escola (escopo='escola') mas NÃO as particulares de professores
             if (gestor) return p.escopo !== 'proprio';
             // Professor: vê suas próprias + as da escola
-            return p.escopo === 'escola' || p.criadoPor === uid;
+            if (p.escopo === 'escola' || p.criadoPor === uid) return true;
+            // Professor responsável por disciplina em prova multidisciplinar
+            if (p.multidisciplinar && Array.isArray(p.disciplinasConfig)) {
+              return p.disciplinasConfig.some(dc => dc.professorUid === uid);
+            }
+            return false;
           });
       })
     );
@@ -572,7 +577,11 @@ function iniciarWizardProva() {
     pesos: {},          // { 1:1.0, ... }
     anuladas: {},       // { 5:true, ... }
     escopo: isGestor() ? 'escola' : 'proprio', // gestor sempre cria para escola
+    // Multidisciplinar
+    multidisciplinar: false,
+    disciplinasConfig: [], // [{ nome, questaoInicio, questaoFim, professorUid }]
   };
+  if (isGestor()) carregarEquipe(); // pré-carrega professores em background
   renderWizard();
 }
 
@@ -603,6 +612,8 @@ function wizardNext() { if (wizard.step<4) { wizard.step++; renderWizard(); } }
 function wizardStep1() {
   const d = wizard.data;
   const turmas = cache.turmas || [];
+  const multidisc = isGestor() && d.multidisciplinar;
+
   return `
     <div class="wizard-step-label">Passo 1 de 4</div>
     <div class="wizard-step-title">Dados básicos</div>
@@ -614,15 +625,48 @@ function wizardStep1() {
                placeholder="Ex: Prova 1 — Funções" value="${escapeHtml(d.nome)}"
                oninput="wizard.data.nome=this.value; w1Check()">
       </div>
+
+      ${ isGestor() ? `
+      <div class="input-group">
+        <label class="input-label">Tipo de avaliação</label>
+        <div class="segmented" id="w-tipo-seg">
+          <div class="seg ${!multidisc?'active':''}" onclick="wizard.data.multidisciplinar=false;wizard.data.disciplinasConfig=[];renderWizard()">📖 Uma disciplina</div>
+          <div class="seg ${multidisc?'active':''}" onclick="wizard.data.multidisciplinar=true;renderWizard()">📚 Multidisciplinar</div>
+        </div>
+      </div>` : '' }
+
+      ${ !multidisc ? `
       <div class="input-group">
         <label class="input-label">Disciplina</label>
         <input class="input" id="w-disc" type="text" maxlength="40"
                placeholder="Ex: Matemática" value="${escapeHtml(d.disciplina)}"
                oninput="wizard.data.disciplina=this.value; w1Check()">
+        ${ (() => {
+          const discs = app.professor?.disciplinas || [];
+          if (!discs.length) return '';
+          return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+            ${discs.map(disc => `<div class="chip ${d.disciplina===disc?'active':''}" style="cursor:pointer" onclick="document.getElementById('w-disc').value='${escapeHtml(disc).replace(/'/g,"\\'")}';wizard.data.disciplina='${escapeHtml(disc).replace(/'/g,"\\'")}';w1Check();document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));this.classList.add('active')">${escapeHtml(disc)}</div>`).join('')}
+          </div>`;
+        })() }
+      </div>` : `
+      <div class="input-group" id="w-multiblock">
+        <label class="input-label">Disciplinas da avaliação</label>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
+          Defina cada disciplina com o intervalo de questões que lhe corresponde. O intervalo completo será definido após configurar o número total de questões.
+        </div>
+        <div id="w-discs-list">
+          ${renderDisciplinasConfig(d.disciplinasConfig, d.turmaId)}
+        </div>
+        <button class="btn btn-ghost" style="margin-top:8px" onclick="adicionarDisciplinaConfig()">+ Adicionar disciplina</button>
+        <div id="w-disc-aviso" style="font-size:12px;color:var(--yellow);margin-top:6px;display:${d.disciplinasConfig.length<2?'block':'none'}">
+          ⚠️ Adicione pelo menos 2 disciplinas para uma avaliação multidisciplinar.
+        </div>
       </div>
+      ` }
+
       <div class="input-group">
         <label class="input-label">Turma</label>
-        <select class="input" id="w-turma" style="cursor:pointer" onchange="wizard.data.turmaId=this.value; w1Check()">
+        <select class="input" id="w-turma" style="cursor:pointer" onchange="wizard.data.turmaId=this.value; w1Check(); if(wizard.data.multidisciplinar) renderWizard()">
           <option value="">— Selecione —</option>
           ${turmas.map(t => `<option value="${t.id}" ${t.id===d.turmaId?'selected':''}>${escapeHtml(t.nome)}</option>`).join('')}
         </select>
@@ -657,14 +701,100 @@ function wizardStep1() {
     </div>
     <div class="wizard-footer">
       <button class="btn btn-ghost" onclick="navTo('provas')">Cancelar</button>
-      <button class="btn btn-cyan" id="btn-w-next" onclick="wizardNext()" ${ (d.nome&&d.disciplina&&d.turmaId) ? '' : 'disabled' }>Próximo →</button>
+      <button class="btn btn-cyan" id="btn-w-next" onclick="wizardNext()" ${ w1Valid() ? '' : 'disabled' }>Próximo →</button>
     </div>
   `;
 }
+
+/* Renderiza a lista de disciplinas no bloco multidisciplinar */
+function renderDisciplinasConfig(lista, turmaId) {
+  if (!lista.length) return '<div style="font-size:13px;color:var(--text-dim);padding:8px 0">Nenhuma disciplina adicionada ainda.</div>';
+
+  // Busca professores da escola para o seletor
+  return lista.map((item, i) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:700;color:var(--cyan)">Disciplina ${i+1}</span>
+        <button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:0 4px" onclick="removerDisciplinaConfig(${i})">✕</button>
+      </div>
+      <div class="input-group" style="margin-bottom:8px">
+        <label class="input-label" style="font-size:10px">Nome da disciplina</label>
+        <input class="input" style="padding:8px 10px;font-size:13px" type="text" maxlength="40"
+               placeholder="Ex: Matemática" value="${escapeHtml(item.nome||'')}"
+               oninput="wizard.data.disciplinasConfig[${i}].nome=this.value;w1Check()">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div class="input-group">
+          <label class="input-label" style="font-size:10px">Q. início</label>
+          <input class="input" style="padding:8px 10px;font-size:13px" type="number" min="1"
+                 value="${item.questaoInicio||''}" placeholder="1"
+                 oninput="wizard.data.disciplinasConfig[${i}].questaoInicio=parseInt(this.value)||null;w1Check()">
+        </div>
+        <div class="input-group">
+          <label class="input-label" style="font-size:10px">Q. fim</label>
+          <input class="input" style="padding:8px 10px;font-size:13px" type="number" min="1"
+                 value="${item.questaoFim||''}" placeholder="10"
+                 oninput="wizard.data.disciplinasConfig[${i}].questaoFim=parseInt(this.value)||null;w1Check()">
+        </div>
+      </div>
+      <div class="input-group">
+        <label class="input-label" style="font-size:10px">Professor(a) responsável ${turmaId ? '(nesta turma)' : ''}</label>
+        <select class="input" style="padding:8px 10px;font-size:13px;cursor:pointer"
+                onchange="wizard.data.disciplinasConfig[${i}].professorUid=this.value;wizard.data.disciplinasConfig[${i}].professorNome=this.options[this.selectedIndex].dataset.nome||''">
+          <option value="">— Nenhum (opcional) —</option>
+          ${(window._equipeProfessores||[]).map(pr => `<option value="${pr.uid}" data-nome="${escapeHtml(pr.nome)}" ${item.professorUid===pr.uid?'selected':''}>${escapeHtml(pr.nome)}${pr.disciplinas?.length?' ('+pr.disciplinas.join(', ')+')':''}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* Carrega lista de professores da escola (cache leve) */
+let _equipeCacheTs = 0;
+async function carregarEquipe() {
+  if (window._equipeProfessores && Date.now() - _equipeCacheTs < 60000) return;
+  try {
+    const snap = await db.collection('professores').where('escolaId','==',app.escolaId).get();
+    window._equipeProfessores = snap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(p => p.role !== 'gestor' || true);
+    _equipeCacheTs = Date.now();
+  } catch (e) { window._equipeProfessores = []; }
+}
+
+function adicionarDisciplinaConfig() {
+  wizard.data.disciplinasConfig.push({ nome: '', questaoInicio: null, questaoFim: null, professorUid: '', professorNome: '' });
+  // Recarrega professores se necessário e re-renderiza
+  carregarEquipe().then(() => {
+    const el = document.getElementById('w-discs-list');
+    if (el) el.innerHTML = renderDisciplinasConfig(wizard.data.disciplinasConfig, wizard.data.turmaId);
+    const aviso = document.getElementById('w-disc-aviso');
+    if (aviso) aviso.style.display = wizard.data.disciplinasConfig.length < 2 ? 'block' : 'none';
+    w1Check();
+  });
+}
+
+function removerDisciplinaConfig(i) {
+  wizard.data.disciplinasConfig.splice(i, 1);
+  const el = document.getElementById('w-discs-list');
+  if (el) el.innerHTML = renderDisciplinasConfig(wizard.data.disciplinasConfig, wizard.data.turmaId);
+  const aviso = document.getElementById('w-disc-aviso');
+  if (aviso) aviso.style.display = wizard.data.disciplinasConfig.length < 2 ? 'block' : 'none';
+  w1Check();
+}
+
+function w1Valid() {
+  const d = wizard.data;
+  if (!d.nome.trim() || !d.turmaId) return false;
+  if (d.multidisciplinar) {
+    if (d.disciplinasConfig.length < 2) return false;
+    return d.disciplinasConfig.every(c => c.nome.trim() && c.questaoInicio && c.questaoFim && c.questaoInicio <= c.questaoFim);
+  }
+  return !!d.disciplina.trim();
+}
+
 function w1Check() {
   const d = wizard.data;
   const btn = document.getElementById('btn-w-next');
-  if (btn) btn.disabled = !(d.nome.trim() && d.disciplina.trim() && d.turmaId);
+  if (btn) btn.disabled = !w1Valid();
 }
 
 /* Passo 2 — configuração */
@@ -838,7 +968,7 @@ async function salvarProva() {
   try {
     const payload = {
       nome: d.nome.trim(),
-      disciplina: d.disciplina.trim(),
+      disciplina: d.multidisciplinar ? (d.disciplinasConfig.map(c=>c.nome).join(' / ')) : d.disciplina.trim(),
       turmaId: d.turmaId,
       bimestre: d.bimestre,
       anoLetivo: d.anoLetivo.trim(),
@@ -849,6 +979,8 @@ async function salvarProva() {
       anuladas: d.anuladas,
       criadoPor: app.user.uid,
       escopo: isGestor() ? 'escola' : (d.escopo || 'proprio'),
+      multidisciplinar: d.multidisciplinar || false,
+      disciplinasConfig: d.multidisciplinar ? d.disciplinasConfig : [],
     };
     if (wizard.editId) {
       await ref.provas().doc(wizard.editId).update(payload);
@@ -980,6 +1112,8 @@ function editarProva(id) {
     pesos:    { ...(p.pesos    || {}) },
     anuladas: { ...(p.anuladas || {}) },
     escopo: p.escopo || (isGestor() ? 'escola' : 'proprio'),
+    multidisciplinar: p.multidisciplinar || false,
+    disciplinasConfig: p.disciplinasConfig ? JSON.parse(JSON.stringify(p.disciplinasConfig)) : [],
   };
   renderWizard();
 }
@@ -2700,7 +2834,7 @@ async function joinEscola() {
   }
 }
 
-async function vincularProfessor(escolaId, escolaNome, role) {
+async function vincularProfessor(escolaId, escolaNome, role, disciplinasSalvar) {
   const u = app.user;
   const ref = db.collection('professores').doc(u.uid);
   const snap = await ref.get();
@@ -2715,7 +2849,7 @@ async function vincularProfessor(escolaId, escolaNome, role) {
   if (idx >= 0) escolas[idx] = { escolaId, escolaNome, role };
   else escolas.push({ escolaId, escolaNome, role });
 
-  await ref.set({
+  const payload = {
     nome:       u.displayName || 'Professor',
     email:      u.email,
     foto:       u.photoURL || '',
@@ -2724,8 +2858,49 @@ async function vincularProfessor(escolaId, escolaNome, role) {
     // legado (compat)
     escolaId, escolaNome, role,
     vinculadoEm: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
-  app.professor = { ...(cur||{}), nome: u.displayName, email: u.email, foto: u.photoURL, escolas, escolaAtivaId: escolaId, escolaId, escolaNome, role };
+  };
+  if (disciplinasSalvar !== undefined) payload.disciplinas = disciplinasSalvar;
+  await ref.set(payload, { merge: true });
+  app.professor = { ...(cur||{}), nome: u.displayName, email: u.email, foto: u.photoURL, escolas, escolaAtivaId: escolaId, escolaId, escolaNome, role, disciplinas: disciplinasSalvar ?? cur.disciplinas ?? [] };
+}
+
+/* ── Editar disciplinas do professor ── */
+function abrirEditarDisciplinas() {
+  const atual = (app.professor?.disciplinas || []).join(', ');
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Minhas disciplinas</div>
+    <div style="font-size:13px;color:var(--text-muted);line-height:1.5;margin-bottom:4px">
+      Informe as disciplinas que você leciona. Elas serão sugeridas ao criar provas.
+    </div>
+    <div class="input-group">
+      <label class="input-label">Disciplinas <span style="font-weight:400;text-transform:none;letter-spacing:0">(separadas por vírgula)</span></label>
+      <input class="input" id="inp-disciplinas" type="text" maxlength="200"
+             placeholder="Ex: Matemática, Física" value="${escapeHtml(atual)}">
+    </div>
+    <div style="font-size:12px;color:var(--text-dim);line-height:1.5;">
+      Exemplos: Português, Matemática, História, Geografia, Ciências, Inglês, Arte, Educação Física
+    </div>
+    <button class="btn btn-cyan" id="btn-save-disc" onclick="salvarDisciplinasProfessor()">Salvar</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function salvarDisciplinasProfessor() {
+  const raw = document.getElementById('inp-disciplinas').value;
+  const lista = raw.split(',').map(s => s.trim()).filter(Boolean);
+  setLoading('btn-save-disc', true);
+  try {
+    await db.collection('professores').doc(app.user.uid).set({ disciplinas: lista }, { merge: true });
+    app.professor.disciplinas = lista;
+    toast('Disciplinas salvas', 'success');
+    closeModal();
+    navTo('mais'); // refresh
+  } catch (e) {
+    toast('Erro: ' + e.message, 'error');
+  } finally {
+    setLoading('btn-save-disc', false);
+  }
 }
 
 function finishOnboarding() {
@@ -2936,6 +3111,18 @@ function mais() {
   </div>
 
   <div class="mais-section">
+    <div class="mais-section-title">Meu perfil</div>
+    <div class="mais-item" onclick="abrirEditarDisciplinas()">
+      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">📚</div>
+      <div class="mais-item-text">
+        <div class="mais-item-title">Minhas disciplinas</div>
+        <div class="mais-item-sub">${(app.professor?.disciplinas||[]).length > 0 ? escapeHtml((app.professor.disciplinas).join(', ')) : 'Nenhuma definida ainda'}</div>
+      </div>
+      <div class="mais-item-arrow">›</div>
+    </div>
+  </div>
+
+  <div class="mais-section">
     <div class="mais-section-title">Integração</div>
     <div class="mais-item">
       <div class="mais-item-icon" style="background:rgba(245,166,35,0.15);">📤</div>
@@ -2959,7 +3146,7 @@ function mais() {
   </div>
 
   <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:11px;">
-    Leitor de Gabaritos v6 · Etapa 6
+    Leitor de Gabaritos v7 · Pré-Etapa 7
   </div>`;
 }
 
@@ -5015,6 +5202,27 @@ async function executarSalvar() {
       detalhe[q] = { resp, status: ok ? 'correta' : !resp ? 'branco' : 'errada', pontos: ok ? peso : 0 };
     }
 
+    // Calcula nota por disciplina (para provas multidisciplinares)
+    let notasPorDisciplina = {};
+    if (prova.multidisciplinar && Array.isArray(prova.disciplinasConfig)) {
+      for (const dc of prova.disciplinasConfig) {
+        let dAcertos = 0, dMax = 0;
+        for (let q = (dc.questaoInicio||1); q <= (dc.questaoFim||nQ); q++) {
+          if (q < 1 || q > nQ) continue;
+          if (prova.anuladas?.[q]) continue;
+          const peso = parseFloat(prova.pesos?.[q] || 1);
+          dMax += peso;
+          if (detalhe[q]?.status === 'correta') dAcertos += peso;
+        }
+        notasPorDisciplina[dc.nome] = { nota: parseFloat(dAcertos.toFixed(2)), max: parseFloat(dMax.toFixed(2)), professorUid: dc.professorUid||'', professorNome: dc.professorNome||'' };
+      }
+    }
+
+    // UIDs de professores responsáveis por alguma disciplina desta prova nesta turma
+    const professoresResponsaveis = prova.multidisciplinar
+      ? [...new Set((prova.disciplinasConfig||[]).map(dc => dc.professorUid).filter(Boolean))]
+      : [];
+
     const resultado = {
       provaId:    prova.id,
       provaNome:  prova.nome,
@@ -5030,6 +5238,9 @@ async function executarSalvar() {
       duplas:     corr.duplas,
       corrigidoEm: firebase.firestore.FieldValue.serverTimestamp(),
       corrigidoPor: auth.currentUser?.uid || '',
+      multidisciplinar: prova.multidisciplinar || false,
+      notasPorDisciplina,
+      professoresResponsaveis,
     };
 
     // Verifica se já existe resultado para esse aluno/prova (sobrescreve)
@@ -5366,6 +5577,7 @@ async function abrirDetalheResultado(resultadoId) {
     </div>
     <div style="padding:0 16px 8px">
       <div style="font-size:13px;color:var(--text-muted)">${escapeHtml(r.provaNome||'')}</div>
+      ${r.multidisciplinar ? '<span class="badge badge-cyan" style="margin-top:4px;display:inline-flex">📚 Multidisciplinar</span>' : ''}
     </div>
     <div class="res-summary">
       <div class="stat-card"><div class="stat-label">Nota</div><div class="stat-value ${cls==='ok'?'cyan':cls==='warn'?'yellow':''}" ${cls==='fail'?'style="color:#e31b23"':''}>${fmtNota(r.nota||0)}</div></div>
@@ -5378,6 +5590,20 @@ async function abrirDetalheResultado(resultadoId) {
       ${brancos ? `<span class="badge" style="background:var(--surface2);color:var(--text-dim)">○ ${brancos} branco${brancos===1?'':'s'}</span>` : ''}
       ${anuladas ? `<span class="badge badge-yellow">⊘ ${anuladas} anulada${anuladas===1?'':'s'}</span>` : ''}
     </div>
+    ${ r.multidisciplinar && r.notasPorDisciplina && Object.keys(r.notasPorDisciplina).length > 0 ? `
+    <div class="dash-section-title">Nota por disciplina</div>
+    <div style="padding:0 16px 12px;display:flex;flex-direction:column;gap:8px">
+      ${Object.entries(r.notasPorDisciplina).map(([nome, nd]) => {
+        const ndCls = classNota(nd.nota, nd.max);
+        return `<div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--text)">${escapeHtml(nome)}</div>
+            ${nd.professorNome ? `<div style="font-size:11px;color:var(--text-muted)">Prof. ${escapeHtml(nd.professorNome)}</div>` : ''}
+          </div>
+          <div style="font-size:18px;font-weight:800;color:${ndCls==='ok'?'var(--cyan)':ndCls==='warn'?'var(--yellow)':'#e31b23'}">${fmtNota(nd.nota)} <span style="font-size:11px;color:var(--text-dim);font-weight:400">/ ${fmtNota(nd.max)}</span></div>
+        </div>`;
+      }).join('')}
+    </div>` : '' }
     <div class="dash-section-title">Respostas</div>
     <div class="res-detalhe-grid">${cells}</div>
     <div style="padding:0 16px 24px;display:flex;gap:8px">
