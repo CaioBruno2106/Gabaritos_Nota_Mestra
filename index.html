@@ -31,7 +31,20 @@ async function loadCache(force = false) {
     const tasks = [];
     if (force || !cache.turmas) tasks.push(ref.turmas().orderBy('nome').get().then(s => cache.turmas = s.docs.map(d => ({ id: d.id, ...d.data() }))));
     if (force || !cache.alunos) tasks.push(ref.alunos().orderBy('nome').get().then(s => cache.alunos = s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    if (force || !cache.provas) tasks.push(ref.provas().orderBy('criadoEm','desc').get().then(s => cache.provas = s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    if (force || !cache.provas) tasks.push(
+      ref.provas().orderBy('criadoEm','desc').get().then(s => {
+        const uid = app.user?.uid;
+        const gestor = isGestor();
+        cache.provas = s.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(p => {
+            // Gestor: vê provas da escola (escopo='escola') mas NÃO as particulares de professores
+            if (gestor) return p.escopo !== 'proprio';
+            // Professor: vê suas próprias + as da escola
+            return p.escopo === 'escola' || p.criadoPor === uid;
+          });
+      })
+    );
     await Promise.all(tasks);
   } catch (e) {
     console.warn('loadCache', e);
@@ -520,11 +533,18 @@ async function renderProvas() {
   }
   list.innerHTML = arr.map(p => {
     const turmaNome = turmaNomeById(p.turmaId);
+    const isEscola = p.escopo === 'escola';
+    const isMinha  = p.criadoPor === app.user?.uid;
+    const badgeEscopo = isEscola
+      ? `<span class="badge badge-cyan" style="font-size:10px">🏫 Escola</span>`
+      : `<span class="badge badge-blue" style="font-size:10px">🔒 Particular</span>`;
     return `
       <div class="list-card" onclick="abrirProva('${p.id}')">
-        <div class="list-card-icon yellow">📋</div>
+        <div class="list-card-icon ${isEscola ? 'cyan' : 'yellow'}">📋</div>
         <div class="list-card-body">
-          <div class="list-card-title">${escapeHtml(p.nome)}</div>
+          <div class="list-card-title" style="display:flex;align-items:center;gap:6px">
+            ${escapeHtml(p.nome)} ${badgeEscopo}
+          </div>
           <div class="list-card-sub">${escapeHtml(p.disciplina||'')} · ${escapeHtml(turmaNome)} · ${p.numQuestoes||'?'} questões</div>
         </div>
         <div class="list-card-arrow">›</div>
@@ -551,6 +571,7 @@ function iniciarWizardProva() {
     gabarito: {},       // { 1:'A', 2:'C', ... }
     pesos: {},          // { 1:1.0, ... }
     anuladas: {},       // { 5:true, ... }
+    escopo: isGestor() ? 'escola' : 'proprio', // gestor sempre cria para escola
   };
   renderWizard();
 }
@@ -619,6 +640,20 @@ function wizardStep1() {
                placeholder="2026" value="${escapeHtml(d.anoLetivo)}"
                oninput="wizard.data.anoLetivo=this.value">
       </div>
+      ${ !isGestor() ? `
+      <div class="input-group">
+        <label class="input-label">Visibilidade da prova</label>
+        <div class="segmented" id="w-escopo-seg">
+          <div class="seg ${d.escopo==='proprio'?'active':''}" data-val="proprio" onclick="segPick(this);wizard.data.escopo=this.dataset.val">🔒 Só eu</div>
+          <div class="seg ${d.escopo==='escola'?'active':''}" data-val="escola" onclick="segPick(this);wizard.data.escopo=this.dataset.val">🏫 Toda escola</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.5">
+          ${ d.escopo==='escola' ? '📢 Todos os professores poderão ver e usar esta prova.' : '🔒 Só você verá esta prova — gestores não têm acesso.' }
+        </div>
+      </div>` : `
+      <div style="padding:10px 12px;background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.25);border-radius:var(--r-md);font-size:13px;color:var(--yellow);line-height:1.5">
+        🏫 Como gestor(a), esta prova ficará visível para todos os professores da escola.
+      </div>` }
     </div>
     <div class="wizard-footer">
       <button class="btn btn-ghost" onclick="navTo('provas')">Cancelar</button>
@@ -813,6 +848,7 @@ async function salvarProva() {
       pesos: d.pesos,
       anuladas: d.anuladas,
       criadoPor: app.user.uid,
+      escopo: isGestor() ? 'escola' : (d.escopo || 'proprio'),
     };
     if (wizard.editId) {
       await ref.provas().doc(wizard.editId).update(payload);
@@ -844,9 +880,18 @@ async function abrirProva(id) {
     <div class="detail-header">
       <div class="back-btn" onclick="navTo('provas')">‹</div>
       <div class="detail-title">${escapeHtml(p.nome)}</div>
-      <button class="icon-btn" onclick="editarProva('${p.id}')" title="Editar">✏️</button>
+      ${ (p.criadoPor === app.user?.uid || isGestor())
+        ? `<button class="icon-btn" onclick="editarProva('${p.id}')" title="Editar">✏️</button>`
+        : '' }
     </div>
-    <div style="padding:0 16px 10px"><span class="badge badge-cyan">${escapeHtml(p.disciplina||'')}</span> <span class="badge badge-blue">${escapeHtml(turmaNome)}</span> <span class="badge badge-yellow">${escapeHtml(p.bimestre||'1')}ª unidade</span></div>
+    <div style="padding:0 16px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      <span class="badge badge-cyan">${escapeHtml(p.disciplina||'')}</span>
+      <span class="badge badge-blue">${escapeHtml(turmaNome)}</span>
+      <span class="badge badge-yellow">${escapeHtml(p.bimestre||'1')}ª unidade</span>
+      ${ p.escopo === 'escola'
+        ? '<span class="badge badge-cyan" style="background:rgba(0,180,216,0.15)">🏫 Escola</span>'
+        : '<span class="badge badge-blue" style="background:rgba(26,86,160,0.15)">🔒 Particular</span>' }
+    </div>
     <div class="info-grid">
       <div class="info-pill"><div class="info-pill-label">Questões</div><div class="info-pill-value">${p.numQuestoes}</div></div>
       <div class="info-pill"><div class="info-pill-label">Alternativas</div><div class="info-pill-value">A–${'ABCDE'[(p.numAlternativas||5)-1]}</div></div>
@@ -903,9 +948,10 @@ async function abrirProva(id) {
       </div>
     </div>
 
+    ${ (p.criadoPor === app.user?.uid || isGestor()) ? `
     <div style="padding:0 16px 24px">
       <button class="btn btn-danger" onclick="excluirProva('${p.id}')">Excluir prova</button>
-    </div>
+    </div>` : '' }
   `;
 }
 
@@ -925,6 +971,7 @@ function editarProva(id) {
     gabarito: { ...(p.gabarito || {}) },
     pesos:    { ...(p.pesos    || {}) },
     anuladas: { ...(p.anuladas || {}) },
+    escopo: p.escopo || (isGestor() ? 'escola' : 'proprio'),
   };
   renderWizard();
 }
@@ -2122,8 +2169,8 @@ html, body {
       <div class="escola-option" id="opt-create" onclick="selectOpt('create')">
         <div class="escola-option-icon create">🏫</div>
         <div class="escola-option-info">
-          <div class="escola-option-title">Criar nova escola</div>
-          <div class="escola-option-sub">Sou o primeiro professor a usar o app nesta escola. Vou gerar o código de acesso.</div>
+          <div class="escola-option-title">Criar nova escola <span style="font-size:10px;background:rgba(245,166,35,0.2);color:var(--yellow);padding:2px 6px;border-radius:6px;margin-left:4px">Gestor</span></div>
+          <div class="escola-option-sub">Sou coordenador(a) ou gestor(a). Vou cadastrar a escola e gerar o código de acesso para professores.</div>
         </div>
       </div>
       <div class="escola-option" id="opt-join" onclick="selectOpt('join')">
@@ -2197,7 +2244,7 @@ html, body {
     <div class="onboarding-header">
       <div class="onboarding-step-label">Entrar com código</div>
       <div class="onboarding-title">Qual é o código da sua escola?</div>
-      <div class="onboarding-sub">O código tem 6 caracteres e foi gerado pelo primeiro professor que cadastrou a escola no app.</div>
+      <div class="onboarding-sub">O código tem 6 caracteres e foi gerado pelo gestor ou coordenador(a) da escola.</div>
     </div>
     <div class="onboarding-body">
       <div class="input-group">
@@ -2356,12 +2403,14 @@ const db   = firebase.firestore();
 ═══════════════════════════════════════════ */
 const app = {
   user:       null,   // firebase user
-  professor:  null,   // doc de /professores/{uid}
+  professor:  null,   // doc de /professores/{uid}  — role: 'gestor' | 'professor'
   escola:     null,   // doc de /escolas/{escolaId}
   escolaId:   null,
   currentNav: 'inicio',
   obMode:     null    // 'create' | 'join'
 };
+
+function isGestor() { return app.professor?.role === 'gestor'; }
 
 /* ═══════════════════════════════════════════
    UTILIDADES
@@ -2562,7 +2611,7 @@ async function criarEscola() {
     await escolaRef.set(escolaData);
 
     // Vincular professor como admin
-    await vincularProfessor(escolaId, nome, 'admin');
+    await vincularProfessor(escolaId, nome, 'gestor');
 
     // Exibir passo 3
     app.escola = escolaData;
@@ -2761,8 +2810,8 @@ function mais() {
       <div class="mais-profile-name">${u?.displayName || 'Professor'}</div>
       <div class="mais-profile-email">${u?.email || ''}</div>
     </div>
-    <span class="badge badge-${p?.role === 'admin' ? 'yellow' : 'blue'}">
-      ${p?.role === 'admin' ? 'Admin' : 'Professor'}
+    <span class="badge badge-${isGestor() ? 'yellow' : 'blue'}">
+      ${isGestor() ? 'Gestor' : 'Professor'}
     </span>
   </div>
 
@@ -2772,7 +2821,7 @@ function mais() {
       <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">🔑</div>
       <div class="mais-item-text">
         <div class="mais-item-title">Código da escola</div>
-        <div class="mais-item-sub">Compartilhe com colegas professores</div>
+        <div class="mais-item-sub">Compartilhe com professores para que entrem</div>
       </div>
       <div class="mais-item-arrow">›</div>
     </div>
@@ -2783,6 +2832,15 @@ function mais() {
         <div class="mais-item-sub">${app.escola?.cidade || ''} · ${app.escola?.rede || ''}</div>
       </div>
     </div>
+    ${ isGestor() ? `
+    <div class="mais-item" onclick="abrirEquipe()">
+      <div class="mais-item-icon" style="background:rgba(245,166,35,0.15);">👥</div>
+      <div class="mais-item-text">
+        <div class="mais-item-title">Gerenciar equipe</div>
+        <div class="mais-item-sub">Ver e remover professores vinculados</div>
+      </div>
+      <div class="mais-item-arrow">›</div>
+    </div>` : '' }
   </div>
 
   <div class="mais-section">
@@ -2843,6 +2901,77 @@ function confirmSignOut() {
   `);
 }
 
+/* ══════════════════════════════════════
+   GESTÃO DE EQUIPE (só para gestor)
+══════════════════════════════════════ */
+async function abrirEquipe() {
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Equipe da escola</div>
+    <div style="display:flex;justify-content:center;padding:16px 0">
+      <div class="spinner" style="width:28px;height:28px;border-width:3px;color:var(--cyan)"></div>
+    </div>
+  `);
+  try {
+    const snap = await db.collection('professores')
+      .where('escolaId', '==', app.escolaId)
+      .get();
+    const membros = snap.docs.map(d => ({ uid: d.id, ...d.data() }))
+      .filter(m => m.role !== 'gestor'); // não lista o próprio gestor
+    const lista = membros.length === 0
+      ? `<div style="text-align:center;padding:24px 0;color:var(--text-muted);font-size:13px">
+           Nenhum professor vinculado ainda.<br>Compartilhe o código da escola.
+         </div>`
+      : membros.map(m => `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border2)">
+          <div style="width:36px;height:36px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--cyan);flex-shrink:0">
+            ${(m.nome||'?').trim().split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase()}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(m.nome||'—')}</div>
+            <div style="font-size:12px;color:var(--text-muted)">${escapeHtml(m.email||'')}</div>
+          </div>
+          <button onclick="confirmarRemoverProf('${m.uid}','${escapeHtml(m.nome||'')}')"
+            style="padding:6px 10px;border-radius:8px;background:rgba(230,57,70,0.1);border:1px solid rgba(230,57,70,0.25);color:var(--red);font-size:12px;font-weight:600;cursor:pointer">
+            Remover
+          </button>
+        </div>`).join('');
+    closeModal();
+    showModal(`
+      <div class="modal-handle"></div>
+      <div class="modal-title">Equipe · ${membros.length} professor${membros.length!==1?'es':''}</div>
+      <div style="max-height:55vh;overflow-y:auto">${lista}</div>
+      <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+    `);
+  } catch(e) {
+    closeModal();
+    toast('Erro ao carregar equipe: '+e.message, 'error');
+  }
+}
+
+function confirmarRemoverProf(uid, nome) {
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Remover professor?</div>
+    <div style="font-size:14px;color:var(--text-muted);line-height:1.5">
+      <strong style="color:var(--text)">${escapeHtml(nome)}</strong> será desvinculado(a) da escola.
+      Suas provas particulares <strong style="color:var(--text)">não serão apagadas</strong>, mas ele(a) precisará de um novo código para entrar.
+    </div>
+    <button class="btn btn-danger" onclick="removerProfessor('${uid}')">Sim, remover</button>
+    <button class="btn btn-ghost" onclick="abrirEquipe()">Cancelar</button>
+  `);
+}
+
+async function removerProfessor(uid) {
+  try {
+    await db.collection('professores').doc(uid).update({ escolaId: null, escolaNome: null, role: null });
+    closeModal();
+    toast('Professor removido da escola', 'success');
+  } catch(e) {
+    toast('Erro: '+e.message, 'error');
+  }
+}
+
 function showModal(html) {
   closeModal();
   const overlay = document.createElement('div');
@@ -2864,17 +2993,28 @@ function closeModal() {
 async function loadDashStats() {
   if (!app.escolaId) return;
   try {
+    const uid = app.user?.uid;
+    const gestor = isGestor();
     const [provasSnap, turmasSnap, alunosSnap, correcSnap] = await Promise.all([
       db.collection('escolas').doc(app.escolaId).collection('provas').get(),
       db.collection('escolas').doc(app.escolaId).collection('turmas').get(),
       db.collection('escolas').doc(app.escolaId).collection('alunos').get(),
       db.collection('escolas').doc(app.escolaId).collection('resultados').get()
     ]);
+    // Gestor: vê provas da escola (escopo='escola'). Professor: vê as suas + escola
+    const provasFiltradas = provasSnap.docs.filter(d => {
+      const data = d.data();
+      if (gestor) return data.escopo !== 'proprio';
+      return data.escopo === 'escola' || data.criadoPor === uid;
+    });
+    const correcFiltradas = correcSnap.docs.filter(d => {
+      return gestor ? true : d.data().corrigidoPor === uid;
+    });
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    set('stat-provas',    provasSnap.size);
+    set('stat-provas',    provasFiltradas.length);
     set('stat-turmas',    turmasSnap.size);
     set('stat-alunos',    alunosSnap.size);
-    set('stat-correcoes', correcSnap.size);
+    set('stat-correcoes', correcFiltradas.length);
   } catch { /* Coleções ainda não existem — normal no início */ }
 }
 
