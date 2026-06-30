@@ -46,7 +46,12 @@ async function loadCache(force = false) {
             // Gestor: vê provas da escola (escopo='escola') mas NÃO as particulares de professores
             if (gestor) return p.escopo !== 'proprio';
             // Professor: vê suas próprias + as da escola
-            if (p.escopo === 'escola' || p.criadoPor === uid) return true;
+            if (p.escopo === 'escola' || p.criadoPor === uid) {
+              // Verifica se professor está na lista de destinatários ([] = todos)
+              const dest = p.professoresDestinatarios;
+              if (Array.isArray(dest) && dest.length > 0 && !dest.includes(uid) && p.criadoPor !== uid) return false;
+              return true;
+            }
             // Professor responsável por disciplina em prova multidisciplinar
             if (p.multidisciplinar && Array.isArray(p.disciplinasConfig)) {
               return p.disciplinasConfig.some(dc => dc.professorUid === uid);
@@ -505,8 +510,19 @@ const _origAbrirTurma = abrirTurma;
 abrirTurma = async function(id) { _detalheTurmaId = id; return _origAbrirTurma(id); };
 
 /* ════════════════════════════════════════
-   VIEW: PROVAS
+   VIEW: PROVAS — com filtros
 ═══════════════════════════════════════════ */
+
+/* Estado dos filtros de provas */
+const _filtrosProvas = {
+  disciplina: '',
+  turmaId: '',
+  bimestre: '',
+  anoLetivo: '',
+  escopo: '',   // '' = todos | 'proprio' = minhas | 'escola' = da gestão
+  aberto: false,
+};
+
 function provas() {
   setTimeout(() => renderProvas(), 0);
   return `
@@ -517,11 +533,68 @@ function provas() {
       </div>
       <button class="btn-icon" onclick="iniciarWizardProva()">+</button>
     </div>
-    <div style="padding:0 16px 4px;display:flex;align-items:center;gap:8px">
-      <div class="chip ${_showArquivadas?'active':''}" onclick="toggleArquivadas()" style="cursor:pointer;font-size:12px">
-        📦 ${_showArquivadas ? 'Ocultar arquivadas' : 'Ver arquivadas'}
+
+    <!-- Barra de busca + botão filtros -->
+    <div style="padding:0 16px 4px;display:flex;gap:8px;align-items:center">
+      <input class="search-input" id="provas-search" placeholder="Buscar prova..."
+             style="flex:1" oninput="renderProvas()">
+      <button class="btn-icon" id="btn-filtros-provas" style="background:var(--surface2);color:var(--text);box-shadow:none;border:1px solid var(--border);position:relative"
+              onclick="toggleFiltrosProvas()">
+        ⚙️
+        <span id="filtros-badge" style="display:none;position:absolute;top:-4px;right:-4px;width:10px;height:10px;background:var(--cyan);border-radius:50%"></span>
+      </button>
+    </div>
+
+    <!-- Painel de filtros recolhível -->
+    <div id="filtros-provas-panel" style="display:none;padding:0 16px 8px;background:var(--surface);border-bottom:1px solid var(--border);margin-bottom:4px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px 0 4px">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Turma</div>
+          <select class="input" style="font-size:12px;padding:6px 8px;cursor:pointer" id="fp-turma"
+                  onchange="_filtrosProvas.turmaId=this.value;renderProvas();atualizarBadgeFiltros()">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Disciplina</div>
+          <input class="input" id="fp-disc" type="text" placeholder="Ex: Matemática"
+                 style="font-size:12px;padding:6px 8px"
+                 value="${escapeHtml(_filtrosProvas.disciplina)}"
+                 oninput="_filtrosProvas.disciplina=this.value;renderProvas();atualizarBadgeFiltros()">
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Unidade letiva</div>
+          <select class="input" style="font-size:12px;padding:6px 8px;cursor:pointer" id="fp-bim"
+                  onchange="_filtrosProvas.bimestre=this.value;renderProvas();atualizarBadgeFiltros()">
+            <option value="">Todas</option>
+            <option value="1">1ª</option><option value="2">2ª</option>
+            <option value="3">3ª</option><option value="4">4ª</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Ano letivo</div>
+          <input class="input" id="fp-ano" type="text" placeholder="Ex: 2026"
+                 style="font-size:12px;padding:6px 8px" maxlength="9"
+                 value="${escapeHtml(_filtrosProvas.anoLetivo)}"
+                 oninput="_filtrosProvas.anoLetivo=this.value;renderProvas();atualizarBadgeFiltros()">
+        </div>
+      </div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Origem</div>
+        <div class="filter-chips" style="flex-wrap:nowrap;overflow-x:auto">
+          <div class="chip ${_filtrosProvas.escopo===''?'active':''}" onclick="_filtrosProvas.escopo='';renderProvas();atualizarBadgeFiltros();document.querySelectorAll('#fp-escopo-chips .chip').forEach(c=>c.classList.remove('active'));this.classList.add('active')" id="fp-escopo-chips">Todas</div>
+          <div class="chip ${_filtrosProvas.escopo==='proprio'?'active':''}" onclick="_filtrosProvas.escopo='proprio';renderProvas();atualizarBadgeFiltros()">Minhas</div>
+          <div class="chip ${_filtrosProvas.escopo==='escola'?'active':''}" onclick="_filtrosProvas.escopo='escola';renderProvas();atualizarBadgeFiltros()">Escola</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <div class="chip ${_showArquivadas?'active':''}" onclick="toggleArquivadas()" style="cursor:pointer;font-size:12px">
+          📦 ${_showArquivadas ? 'Ocultar arquivadas' : 'Ver arquivadas'}
+        </div>
+        <div class="chip" onclick="limparFiltrosProvas()" style="cursor:pointer;font-size:12px;color:var(--text-muted)">✕ Limpar filtros</div>
       </div>
     </div>
+
     <div id="provas-list" class="list-wrap">
       <div class="skel skel-card"></div>
       <div class="skel skel-card"></div>
@@ -529,9 +602,49 @@ function provas() {
   `;
 }
 
+function toggleFiltrosProvas() {
+  _filtrosProvas.aberto = !_filtrosProvas.aberto;
+  const panel = document.getElementById('filtros-provas-panel');
+  if (!panel) return;
+  panel.style.display = _filtrosProvas.aberto ? 'block' : 'none';
+  // Preenche select de turmas
+  if (_filtrosProvas.aberto) {
+    const sel = document.getElementById('fp-turma');
+    if (sel) {
+      const turmas = cache.turmas || [];
+      sel.innerHTML = `<option value="">Todas</option>` +
+        turmas.map(t => `<option value="${t.id}" ${_filtrosProvas.turmaId===t.id?'selected':''}>${escapeHtml(t.nome)}</option>`).join('');
+    }
+    const selBim = document.getElementById('fp-bim');
+    if (selBim) selBim.value = _filtrosProvas.bimestre;
+  }
+}
+
+function limparFiltrosProvas() {
+  _filtrosProvas.disciplina = '';
+  _filtrosProvas.turmaId = '';
+  _filtrosProvas.bimestre = '';
+  _filtrosProvas.anoLetivo = '';
+  _filtrosProvas.escopo = '';
+  // Reset inputs
+  ['fp-turma','fp-bim'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  ['fp-disc','fp-ano'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  atualizarBadgeFiltros();
+  renderProvas();
+}
+
+function atualizarBadgeFiltros() {
+  const temFiltro = _filtrosProvas.disciplina || _filtrosProvas.turmaId ||
+                    _filtrosProvas.bimestre || _filtrosProvas.anoLetivo || _filtrosProvas.escopo;
+  const badge = document.getElementById('filtros-badge');
+  if (badge) badge.style.display = temFiltro ? 'block' : 'none';
+}
+
 function toggleArquivadas() {
   _showArquivadas = !_showArquivadas;
   cache.provas = null; // força reload para pegar arquivadas também
+  // Atualiza texto do chip
+  const chip = document.querySelector('#filtros-provas-panel .chip');
   renderProvas();
 }
 
@@ -540,14 +653,33 @@ async function renderProvas() {
   const list = document.getElementById('provas-list');
   const countEl = document.getElementById('provas-count');
   if (!list) return;
-  const arr = cache.provas || [];
-  countEl.textContent = arr.length === 0 ? 'Nenhuma prova ainda' : `${arr.length} prova${arr.length>1?'s':''}`;
+
+  const search = (document.getElementById('provas-search')?.value || '').toLowerCase().trim();
+
+  let arr = (cache.provas || []).filter(p => {
+    // Busca textual
+    if (search && !(p.nome||'').toLowerCase().includes(search) && !(p.disciplina||'').toLowerCase().includes(search)) return false;
+    // Filtro turma
+    if (_filtrosProvas.turmaId && p.turmaId !== _filtrosProvas.turmaId) return false;
+    // Filtro disciplina
+    if (_filtrosProvas.disciplina && !(p.disciplina||'').toLowerCase().includes(_filtrosProvas.disciplina.toLowerCase())) return false;
+    // Filtro bimestre/unidade letiva
+    if (_filtrosProvas.bimestre && String(p.bimestre) !== _filtrosProvas.bimestre) return false;
+    // Filtro ano letivo
+    if (_filtrosProvas.anoLetivo && !(p.anoLetivo||'').includes(_filtrosProvas.anoLetivo)) return false;
+    // Filtro escopo/origem
+    if (_filtrosProvas.escopo === 'proprio' && p.criadoPor !== app.user?.uid) return false;
+    if (_filtrosProvas.escopo === 'escola' && p.escopo !== 'escola') return false;
+    return true;
+  });
+
+  countEl.textContent = arr.length === 0 ? 'Nenhuma prova' : `${arr.length} prova${arr.length>1?'s':''}`;
   if (!arr.length) {
     list.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📋</div>
-        <div class="empty-title">Nenhuma prova criada</div>
-        <div class="empty-sub">Crie sua primeira prova: defina o gabarito, gere o cartão-resposta e corrija com a câmera.</div>
+        <div class="empty-title">Nenhuma prova encontrada</div>
+        <div class="empty-sub">Ajuste os filtros ou crie uma nova prova.</div>
         <button class="btn btn-cyan" onclick="iniciarWizardProva()">+ Nova prova</button>
       </div>`;
     return;
@@ -555,7 +687,6 @@ async function renderProvas() {
   list.innerHTML = arr.map(p => {
     const turmaNome = turmaNomeById(p.turmaId);
     const isEscola = p.escopo === 'escola';
-    const isMinha  = p.criadoPor === app.user?.uid;
     const isArquivada = !!p.arquivada;
     const badgeEscopo = isEscola
       ? `<span class="badge badge-cyan" style="font-size:10px">🏫 Escola</span>`
@@ -563,6 +694,9 @@ async function renderProvas() {
     const badgeArq = isArquivada
       ? `<span class="badge" style="font-size:10px;background:rgba(122,154,191,0.15);color:var(--text-muted)">📦 Arquivada</span>`
       : '';
+    const bimLabel = p.bimestre ? `${p.bimestre}ª unid.` : '';
+    const anoLabel = p.anoLetivo || '';
+    const meta = [escapeHtml(p.disciplina||''), escapeHtml(turmaNome), bimLabel, anoLabel, `${p.numQuestoes||'?'} questões`].filter(Boolean).join(' · ');
     return `
       <div class="list-card" onclick="abrirProva('${p.id}')" style="${isArquivada?'opacity:0.65':''}">
         <div class="list-card-icon ${isEscola ? 'cyan' : 'yellow'}">📋</div>
@@ -570,7 +704,7 @@ async function renderProvas() {
           <div class="list-card-title" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             ${escapeHtml(p.nome)} ${badgeEscopo} ${badgeArq}
           </div>
-          <div class="list-card-sub">${escapeHtml(p.disciplina||'')} · ${escapeHtml(turmaNome)} · ${p.numQuestoes||'?'} questões</div>
+          <div class="list-card-sub">${meta}</div>
         </div>
         <div class="list-card-arrow">›</div>
       </div>`;
@@ -600,9 +734,14 @@ function iniciarWizardProva() {
     // Multidisciplinar
     multidisciplinar: false,
     disciplinasConfig: [], // [{ nome, questaoInicio, questaoFim, professorUid }]
+    // Destinatários (gestão pode restringir quais professores veem a prova)
+    professoresDestinatarios: [], // [] = todos; [uid,...] = apenas estes
   };
-  if (isGestor()) carregarEquipe(); // pré-carrega professores em background
-  renderWizard();
+  if (isGestor()) {
+    carregarEquipe().then(() => renderWizard()); // pré-carrega professores e re-renderiza
+  } else {
+    renderWizard();
+  }
 }
 
 function renderWizard() {
@@ -715,8 +854,17 @@ function wizardStep1() {
           ${ d.escopo==='escola' ? '📢 Todos os professores poderão ver e usar esta prova.' : '🔒 Só você verá esta prova — gestores não têm acesso.' }
         </div>
       </div>` : `
-      <div style="padding:10px 12px;background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.25);border-radius:var(--r-md);font-size:13px;color:var(--yellow);line-height:1.5">
-        🏫 Como gestor(a), esta prova ficará visível para todos os professores da escola.
+      <div class="input-group">
+        <label class="input-label">Destinatários da prova</label>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
+          Escolha quais professores poderão ver e usar esta prova. Por padrão, todos têm acesso.
+        </div>
+        <div id="w-dest-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
+          ${ renderDestinatariosList(d.professoresDestinatarios) }
+        </div>
+        <button class="btn btn-ghost" style="font-size:12px" onclick="toggleTodosDestinatarios()">
+          ${ d.professoresDestinatarios.length === 0 ? '👥 Todos os professores (padrão)' : `✏️ ${d.professoresDestinatarios.length} professor(es) selecionado(s)` }
+        </button>
       </div>` }
     </div>
     <div class="wizard-footer">
@@ -778,6 +926,91 @@ async function carregarEquipe() {
     window._equipeProfessores = snap.docs.map(d => ({ uid: d.id, ...d.data() })).filter(p => p.role !== 'gestor' || true);
     _equipeCacheTs = Date.now();
   } catch (e) { window._equipeProfessores = []; }
+}
+
+/* ── Destinatários da prova (gestão) ── */
+function renderDestinatariosList(selecionados) {
+  const profs = window._equipeProfessores || [];
+  const nSel = selecionados.length;
+  if (!profs.length) return `<div style="font-size:12px;color:var(--text-dim)">Carregando professores...</div>`;
+  // Modo "todos" (lista vazia = todos)
+  if (nSel === 0) {
+    return `<div style="font-size:12px;color:var(--text-muted);padding:6px 0">
+      👥 Todos os professores da escola poderão ver esta prova.
+      <button class="btn btn-ghost" style="margin-top:6px;font-size:12px;width:100%" onclick="abrirSeletorDestinatarios()">Restringir para professores específicos →</button>
+    </div>`;
+  }
+  const nomes = selecionados.map(uid => {
+    const p = profs.find(x => x.uid === uid);
+    return p ? escapeHtml(p.nome||uid) : uid;
+  });
+  return `<div style="font-size:12px;color:var(--text-muted);padding:4px 0">
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+      ${nomes.map((n,i) => `<span class="badge badge-cyan" style="font-size:11px">${n}
+        <span style="cursor:pointer;margin-left:4px;opacity:.7" onclick="removerDestinatario('${selecionados[i]}')">✕</span>
+      </span>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="font-size:12px;flex:1" onclick="abrirSeletorDestinatarios()">+ Adicionar professor</button>
+      <button class="btn btn-ghost" style="font-size:12px;flex:1" onclick="wizard.data.professoresDestinatarios=[];atualizarDestinatariosUI()">Limpar (todos)</button>
+    </div>
+  </div>`;
+}
+
+function atualizarDestinatariosUI() {
+  const el = document.getElementById('w-dest-list');
+  if (el) el.innerHTML = renderDestinatariosList(wizard.data.professoresDestinatarios);
+}
+
+function removerDestinatario(uid) {
+  wizard.data.professoresDestinatarios = wizard.data.professoresDestinatarios.filter(u => u !== uid);
+  atualizarDestinatariosUI();
+}
+
+function toggleTodosDestinatarios() {
+  if (wizard.data.professoresDestinatarios.length === 0) {
+    abrirSeletorDestinatarios();
+  } else {
+    wizard.data.professoresDestinatarios = [];
+    atualizarDestinatariosUI();
+  }
+}
+
+function abrirSeletorDestinatarios() {
+  carregarEquipe().then(() => {
+    const profs = (window._equipeProfessores||[]).filter(p => p.role !== 'gestor');
+    const selecionados = wizard.data.professoresDestinatarios || [];
+    showModal(`
+      <div class="modal-handle"></div>
+      <div class="modal-title">Selecionar professores</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Marque quais professores poderão ver e usar esta prova.</div>
+      ${profs.length === 0
+        ? `<div style="font-size:13px;color:var(--text-dim);text-align:center;padding:16px">Nenhum professor cadastrado ainda.</div>`
+        : profs.map(p => `
+          <label style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">
+            <input type="checkbox" id="dest-${p.uid}" value="${p.uid}"
+                   ${selecionados.includes(p.uid)?'checked':''}
+                   style="width:18px;height:18px;accent-color:var(--cyan);cursor:pointer">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">${escapeHtml(p.nome||'—')}</div>
+              <div style="font-size:11px;color:var(--text-muted)">${escapeHtml(p.disciplinas?.join(', ')||'')}</div>
+            </div>
+          </label>`).join('')
+      }
+      <button class="btn btn-cyan" style="margin-top:12px" onclick="confirmarDestinatarios()">Confirmar</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+    `);
+  });
+}
+
+function confirmarDestinatarios() {
+  const profs = window._equipeProfessores || [];
+  const selecionados = profs
+    .filter(p => document.getElementById(`dest-${p.uid}`)?.checked)
+    .map(p => p.uid);
+  wizard.data.professoresDestinatarios = selecionados;
+  closeModal();
+  atualizarDestinatariosUI();
 }
 
 function adicionarDisciplinaConfig() {
@@ -1001,6 +1234,7 @@ async function salvarProva() {
       escopo: isGestor() ? 'escola' : (d.escopo || 'proprio'),
       multidisciplinar: d.multidisciplinar || false,
       disciplinasConfig: d.multidisciplinar ? d.disciplinasConfig : [],
+      professoresDestinatarios: isGestor() ? (d.professoresDestinatarios || []) : [],
     };
     if (wizard.editId) {
       await ref.provas().doc(wizard.editId).update(payload);
@@ -1045,6 +1279,9 @@ async function abrirProva(id) {
         : '<span class="badge badge-blue" style="background:rgba(26,86,160,0.15)">🔒 Particular</span>' }
       ${ p.arquivada
         ? '<span class="badge" style="background:rgba(122,154,191,0.15);color:var(--text-muted)">📦 Arquivada</span>'
+        : '' }
+      ${ isGestor() && Array.isArray(p.professoresDestinatarios) && p.professoresDestinatarios.length > 0
+        ? `<span class="badge badge-yellow" title="Prova restrita a professores específicos">👤 ${p.professoresDestinatarios.length} professor(es)</span>`
         : '' }
     </div>
     <div class="info-grid">
@@ -1140,8 +1377,13 @@ function editarProva(id) {
     escopo: p.escopo || (isGestor() ? 'escola' : 'proprio'),
     multidisciplinar: p.multidisciplinar || false,
     disciplinasConfig: p.disciplinasConfig ? JSON.parse(JSON.stringify(p.disciplinasConfig)) : [],
+    professoresDestinatarios: p.professoresDestinatarios ? [...p.professoresDestinatarios] : [],
   };
-  renderWizard();
+  if (isGestor()) {
+    carregarEquipe().then(() => renderWizard());
+  } else {
+    renderWizard();
+  }
 }
 
 function excluirProva(id) {
@@ -2368,6 +2610,19 @@ html, body {
 </div>
 
 <script>
+/* ── Tempo de início da splash (para garantir duração mínima) ── */
+const _splashStartTime = Date.now();
+const _SPLASH_MIN_MS = 2200; // tempo mínimo que a splash fica visível
+
+function showScreenAfterSplash(screenId, callback) {
+  const elapsed = Date.now() - _splashStartTime;
+  const remaining = Math.max(0, _SPLASH_MIN_MS - elapsed);
+  setTimeout(() => {
+    showScreen(screenId);
+    if (callback) callback();
+  }, remaining);
+}
+
 /* ── Animação da splash Nota Mestra ──
    Sequência fiel à referência:
    1 fundo · 2 folha · 3 círculos aparecem · 4 pontos se preenchem · 5 símbolo · 6 pronto
@@ -2896,8 +3151,7 @@ async function signOut() {
 auth.onAuthStateChanged(async (user) => {
   if (!user) {
     app.user = null; app.professor = null; app.escola = null;
-    showScreen('screen-login');
-    buildBubbleGrid();
+    showScreenAfterSplash('screen-login', buildBubbleGrid);
     return;
   }
   app.user = user;
@@ -2923,12 +3177,10 @@ auth.onAuthStateChanged(async (user) => {
       }
     }
     // Sem escola vinculada → onboarding
-    showScreen('screen-onboarding');
-    showObStep(1);
+    showScreenAfterSplash('screen-onboarding', () => showObStep(1));
   } catch (e) {
     toast('Erro ao carregar dados: ' + e.message, 'error');
-    showScreen('screen-onboarding');
-    showObStep(1);
+    showScreenAfterSplash('screen-onboarding', () => showObStep(1));
   }
 });
 
@@ -3147,7 +3399,7 @@ function copyCode() {
    APP PRINCIPAL
 ═══════════════════════════════════════════ */
 function showApp() {
-  showScreen('screen-app');
+  showScreenAfterSplash('screen-app', null);
 
   // Topbar
   const u = app.user;
