@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
 <title>Nota Mestra</title>
-<!-- build: v7a (Etapa A — Arquivar provas · Excluir correções · Nota por disciplina na conferência) -->
+<!-- build: v7 (Etapa 7 — Exportação JSON para Nota Mestra, formato de backup por turma, prova ou atividade) -->
+<!-- build anterior: v7a (Etapa A — Arquivar provas · Excluir correções · Nota por disciplina na conferência) -->
 
 <!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -3606,11 +3607,11 @@ function mais() {
 
   <div class="mais-section">
     <div class="mais-section-title">Integração</div>
-    <div class="mais-item">
+    <div class="mais-item" onclick="abrirExportacaoNM()">
       <div class="mais-item-icon" style="background:rgba(245,166,35,0.15);">📤</div>
       <div class="mais-item-text">
         <div class="mais-item-title">Exportar para Nota Mestra</div>
-        <div class="mais-item-sub">CSV por turma e disciplina</div>
+        <div class="mais-item-sub">JSON por turma e prova, compatível com o backup</div>
       </div>
       <div class="mais-item-arrow">›</div>
     </div>
@@ -5792,6 +5793,269 @@ async function executarSalvar() {
 }
 
 /* initials() defined in core */
+
+/* ═══════════════════════════════════════════════════════════════
+   ETAPA 7 — EXPORTAÇÃO PARA NOTA MESTRA (backup JSON por turma)
+   Fluxo: escolher turma → escolher prova já corrigida → escolher
+   se vira "Prova da unidade" ou "Atividade" → gerar e baixar o
+   JSON no mesmo formato do backup completo de turma do Nota Mestra
+   (setup + grades.atividades/prova/extras/uiConfig), preenchendo
+   apenas o campo escolhido — o resto fica vazio, pronto pra restaurar.
+═══════════════════════════════════════════════════════════════ */
+
+const _expNM = { turmaId: null, provaId: null, discNome: null };
+
+/* Arredondamento usado pelo Nota Mestra: decimal ≤ 0.5 → X.5 · decimal > 0.5 → arredonda pra cima */
+function arredondarNotaMestra(n) {
+  if (n === null || n === undefined || isNaN(n)) return null;
+  const base = Math.floor(n);
+  const dec = n - base;
+  if (dec === 0) return base;
+  if (dec <= 0.5) return base + 0.5;
+  return base + 1;
+}
+
+/* Tenta separar "9º A" em série + turma pra pré-preencher o formulário */
+function _parseSerieTurma(nomeTurma) {
+  const nome = (nomeTurma || '').trim();
+  const m = nome.match(/^(\d+)\s*[ºo°]?\s*/i);
+  if (!m) return { serie: '', turma: nome };
+  const serie = `${m[1]}º Ano`;
+  const turma = nome.slice(m[0].length).trim() || nome;
+  const num = parseInt(m[1], 10);
+  const nivel = num <= 5 ? 'Fundamental I' : (num <= 9 ? 'Fundamental II' : 'Médio');
+  return { serie, turma, nivel };
+}
+
+async function abrirExportacaoNM() {
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Exportar para Nota Mestra</div>
+    <div style="display:flex;justify-content:center;padding:16px 0">
+      <div class="spinner" style="width:28px;height:28px;border-width:3px;color:var(--cyan)"></div>
+    </div>
+  `);
+  await loadCache();
+  await loadResultados();
+  closeModal();
+
+  if (!(cache.turmas || []).length) {
+    showModal(`
+      <div class="modal-handle"></div>
+      <div class="modal-title">Exportar para Nota Mestra</div>
+      <div style="font-size:13px;color:var(--text-muted)">Cadastre uma turma primeiro.</div>
+      <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
+    `);
+    return;
+  }
+
+  _expNM.turmaId = cache.turmas[0].id;
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Exportar para Nota Mestra</div>
+    <div style="font-size:13px;color:var(--text-muted);line-height:1.5;margin-bottom:4px">
+      Gera um arquivo JSON no formato do backup de turma do Nota Mestra, já com a nota desta prova preenchida — pronto pra restaurar lá.
+    </div>
+    <div class="input-group">
+      <label class="input-label">Turma</label>
+      <select class="input" id="exp-nm-turma" onchange="_expNM.turmaId=this.value;renderListaProvasExportNM()">
+        ${cache.turmas.map(t => `<option value="${t.id}">${escapeHtml(t.nome)}</option>`).join('')}
+      </select>
+    </div>
+    <div id="exp-nm-provas"></div>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+  renderListaProvasExportNM();
+}
+
+function renderListaProvasExportNM() {
+  const el = document.getElementById('exp-nm-provas');
+  if (!el) return;
+  const turmaId = _expNM.turmaId;
+  const provasComResultado = (cache.provas || []).filter(p => {
+    if (p.turmaId !== turmaId) return false;
+    return (cacheRes.items || []).some(r => r.provaId === p.id);
+  });
+
+  if (!provasComResultado.length) {
+    el.innerHTML = `<div style="font-size:13px;color:var(--text-dim);padding:8px 0">Nenhuma prova corrigida nessa turma ainda.</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="input-label" style="margin-top:8px">Prova</div>
+    <div style="max-height:40vh;overflow-y:auto;margin-top:4px">
+      ${provasComResultado.map(p => `
+        <div class="mais-item" style="cursor:pointer" onclick="abrirFormExportacaoNM('${p.id}')">
+          <div class="mais-item-text">
+            <div class="mais-item-title">${escapeHtml(p.nome)}</div>
+            <div class="mais-item-sub">${escapeHtml(p.disciplina||'')} · ${p.bimestre||'1'}ª unidade</div>
+          </div>
+          <div class="mais-item-arrow">›</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function abrirFormExportacaoNM(provaId) {
+  const prova = (cache.provas || []).find(p => p.id === provaId);
+  const turma = (cache.turmas || []).find(t => t.id === _expNM.turmaId);
+  if (!prova || !turma) { toast('Prova ou turma não encontrada', 'error'); return; }
+
+  _expNM.provaId = provaId;
+  _expNM.discNome = prova.multidisciplinar ? (prova.disciplinasConfig?.[0]?.nome || '') : '';
+
+  const guess = _parseSerieTurma(turma.nome);
+
+  const discPicker = prova.multidisciplinar ? `
+    <div class="input-group">
+      <label class="input-label">Disciplina (prova multidisciplinar)</label>
+      <select class="input" id="exp-nm-disc" onchange="_expNM.discNome=this.value">
+        ${(prova.disciplinasConfig||[]).map(dc => `<option value="${escapeHtml(dc.nome)}">${escapeHtml(dc.nome)}</option>`).join('')}
+      </select>
+    </div>` : '';
+
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Exportar · ${escapeHtml(prova.nome)}</div>
+    ${discPicker}
+    <div class="input-group">
+      <label class="input-label">Nível</label>
+      <input class="input" id="exp-nm-nivel" type="text" placeholder="Ex: Fundamental II" value="${escapeHtml(guess.nivel||'')}">
+    </div>
+    <div class="input-group">
+      <label class="input-label">Série</label>
+      <input class="input" id="exp-nm-serie" type="text" placeholder="Ex: 6º Ano" value="${escapeHtml(guess.serie||'')}">
+    </div>
+    <div class="input-group">
+      <label class="input-label">Turma</label>
+      <input class="input" id="exp-nm-turma-letra" type="text" placeholder="Ex: C" value="${escapeHtml(guess.turma||'')}">
+    </div>
+    <div class="input-group">
+      <label class="input-label">Turno</label>
+      <input class="input" id="exp-nm-turno" type="text" placeholder="Ex: Tarde / Turno II" value="${escapeHtml(turma.turno||'')}">
+    </div>
+    <div class="input-group">
+      <label class="input-label">Essa nota conta como</label>
+      <div class="segmented" id="exp-nm-tipo-seg">
+        <div class="seg active" data-val="prova" onclick="segPick(this);toggleExpAtividade(false)">Prova da unidade</div>
+        <div class="seg" data-val="atividade" onclick="segPick(this);toggleExpAtividade(true)">Atividade</div>
+      </div>
+    </div>
+    <div id="exp-nm-atv-fields" style="display:none">
+      <div class="input-group">
+        <label class="input-label">Quantas atividades tem essa unidade?</label>
+        <input class="input" id="exp-nm-qtd-atv" type="number" min="1" max="20" value="4" oninput="renderSelectAtividadeAlvo()">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Em qual atividade essa nota vai entrar?</label>
+        <select class="input" id="exp-nm-atv-alvo"></select>
+      </div>
+    </div>
+    <button class="btn btn-cyan" onclick="gerarJSONExportacaoNM()">Gerar e baixar JSON</button>
+    <button class="btn btn-ghost" onclick="abrirFormExportacaoNM('${provaId}')">Voltar</button>
+  `);
+  renderSelectAtividadeAlvo();
+}
+
+function toggleExpAtividade(mostrar) {
+  const el = document.getElementById('exp-nm-atv-fields');
+  if (el) el.style.display = mostrar ? '' : 'none';
+}
+
+function renderSelectAtividadeAlvo() {
+  const qtdEl = document.getElementById('exp-nm-qtd-atv');
+  const sel = document.getElementById('exp-nm-atv-alvo');
+  if (!qtdEl || !sel) return;
+  const qtd = Math.max(1, parseInt(qtdEl.value || '1', 10) || 1);
+  const atual = sel.value;
+  sel.innerHTML = Array.from({ length: qtd }, (_, i) => `atv${i + 1}`)
+    .map(k => `<option value="${k}" ${k === atual ? 'selected' : ''}>${k}</option>`).join('');
+}
+
+function gerarJSONExportacaoNM() {
+  const prova = (cache.provas || []).find(p => p.id === _expNM.provaId);
+  const turma = (cache.turmas || []).find(t => t.id === _expNM.turmaId);
+  if (!prova || !turma) { toast('Prova ou turma não encontrada', 'error'); return; }
+
+  const nivel  = document.getElementById('exp-nm-nivel').value.trim();
+  const serie  = document.getElementById('exp-nm-serie').value.trim();
+  const turmaL = document.getElementById('exp-nm-turma-letra').value.trim();
+  const turno  = document.getElementById('exp-nm-turno').value.trim();
+  const tipo   = segValue('exp-nm-tipo-seg') || 'prova';
+
+  let qtdAtv = 0, atvAlvo = '';
+  if (tipo === 'atividade') {
+    qtdAtv  = Math.max(1, parseInt(document.getElementById('exp-nm-qtd-atv').value || '1', 10) || 1);
+    atvAlvo = document.getElementById('exp-nm-atv-alvo').value;
+    if (!atvAlvo) { toast('Selecione a atividade', 'error'); return; }
+  }
+
+  const alunosDaTurma = (cache.alunos || []).filter(a => a.turmaId === turma.id);
+  if (!alunosDaTurma.length) { toast('Essa turma não tem alunos cadastrados', 'error'); return; }
+
+  const resPorAluno = {};
+  (cacheRes.items || []).forEach(r => { if (r.provaId === prova.id) resPorAluno[r.alunoId] = r; });
+
+  const discNome = prova.multidisciplinar ? _expNM.discNome : null;
+
+  const valores = alunosDaTurma.map(a => {
+    const r = resPorAluno[a.id];
+    if (!r) return '';
+    let nota, max;
+    if (discNome && r.notasPorDisciplina && r.notasPorDisciplina[discNome]) {
+      nota = r.notasPorDisciplina[discNome].nota;
+      max  = r.notasPorDisciplina[discNome].max;
+    } else {
+      nota = r.nota; max = r.notaMax;
+    }
+    if (!max) return '';
+    const nota10 = arredondarNotaMestra((nota / max) * 10);
+    return nota10 === null ? '' : String(nota10);
+  });
+
+  const qtdAlunos = alunosDaTurma.length;
+  const grades = {
+    atividades: {},
+    prova: tipo === 'prova' ? valores : new Array(qtdAlunos).fill(''),
+    extras: new Array(qtdAlunos).fill('0.0'),
+    uiConfig: {},
+  };
+  for (let i = 1; i <= qtdAtv; i++) {
+    const key = 'atv' + i;
+    grades.atividades[key] = (key === atvAlvo) ? valores : new Array(qtdAlunos).fill('');
+  }
+
+  const backup = {
+    setup: {
+      nivel, serie, turma: turmaL, turno,
+      qtdAtividades: qtdAtv,
+      qtdAlunos,
+      nomes: alunosDaTurma.map(a => a.nome),
+      pcds: alunosDaTurma.map(() => false),
+      alunos: alunosDaTurma.map((a, i) => ({ id: i, nome: a.nome, isPcd: false })),
+    },
+    grades,
+  };
+
+  const slug = s => (s || '').replace(/[^a-zA-Z0-9À-ú]+/g, '_').replace(/^_+|_+$/g, '');
+  const discLabel = discNome || prova.disciplina || '';
+  const nomeArquivo = `Turma_${slug(turmaL)}_${slug(serie)}_${slug(discLabel)}_${prova.bimestre||'1'}_Bimestre_${slug(nivel)}_BKP.json`;
+
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const aTag = document.createElement('a');
+  aTag.href = url;
+  aTag.download = nomeArquivo;
+  document.body.appendChild(aTag);
+  aTag.click();
+  aTag.remove();
+  URL.revokeObjectURL(url);
+
+  closeModal();
+  toast('JSON exportado!', 'success');
+}
 
 
 </script>
