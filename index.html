@@ -6211,6 +6211,14 @@ async function abrirResultadosProva(provaId) {
       <div class="skel skel-card"></div>
       <div class="skel skel-card"></div>
     </div>
+    <div style="padding:0 16px 32px">
+      <button class="btn btn-primary" style="width:100%" onclick="exportarResultadosPDF()">
+        🖨️ Exportar PDF
+      </button>
+      <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:6px">
+        Salvar como PDF · funciona no app Android e no navegador
+      </div>
+    </div>
   `;
   renderResultadosProva();
 }
@@ -6905,7 +6913,16 @@ function relRender(bodyEl) {
     }
   }
 
-  bodyEl.innerHTML = resumoHtml + (total > 0 ? pioresHtml + tabsHtml + abaHtml : '');
+  bodyEl.innerHTML = resumoHtml + (total > 0 ? pioresHtml + tabsHtml + abaHtml : '')
+    + (total > 0 ? `
+      <div style="padding:16px 16px 32px">
+        <button class="btn btn-primary" style="width:100%" onclick="exportarRelatorioPDF()">
+          🖨️ Exportar PDF
+        </button>
+        <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:6px">
+          Salvar como PDF · funciona no app Android e no navegador
+        </div>
+      </div>` : '');
 
   // Chart.js: monta gráfico de histograma se for a aba distribuição
   if (_rel.abaAtiva === 'distribuicao' && total > 0) {
@@ -6946,6 +6963,432 @@ function relAba(aba) {
   _rel.abaAtiva = aba;
   relRender();
 }
+
+/* ════════════════════════════════════════════════════════════════
+   ETAPA 7 — EXPORTAÇÃO PDF (Resultados e Relatório)
+   Mesma abordagem do Nota Mestra v59: window.print() é redirecionado
+   para AndroidApp.gerarPDF()/gerarPDFIframe() quando estamos no APK,
+   ou abre o diálogo de impressão nativo do navegador na web.
+   ──────────────────────────────────────────────────────────────── */
+
+/* Override de window.print — APK usa PrintManager nativo */
+if(!window._lgOriginalPrint){
+  window._lgOriginalPrint = window.print ? window.print.bind(window) : function(){};
+}
+window.print = function(){
+  try{
+    if(window.AndroidApp && window.AndroidApp.gerarPDF){
+      window.AndroidApp.gerarPDF();
+    } else {
+      window._lgOriginalPrint();
+    }
+  }catch(e){
+    console.error('Falha ao iniciar impressão/PDF:', e);
+    try{ window._lgOriginalPrint(); }catch(_e){}
+  }
+};
+
+/* Estilos compartilhados dos documentos PDF */
+function _lgPdfEstilo(){
+  return `
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    html,body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#212529;background:#fff;}
+    body{padding:18mm 14mm;font-size:11pt;}
+    .pe-faixa{background:#002b5c;color:#fff;padding:14px 18px;border-radius:6px;}
+    .pe-faixa h1{font-size:1.15rem;font-weight:800;letter-spacing:-.2px;}
+    .pe-faixa h1 span{color:#fdb913;}
+    .pe-faixa p{font-size:.78rem;color:#9fd3ef;margin-top:2px;}
+    .pe-tricolor{display:flex;height:4px;border-radius:0 0 6px 6px;overflow:hidden;}
+    .pe-tricolor>span{flex:1;}
+    .pe-tricolor .y{background:#fdb913;} .pe-tricolor .r{background:#e31b23;} .pe-tricolor .c{background:#00a8e8;}
+    .meta-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px 14px;margin:14px 0 10px;}
+    .meta-grid div{font-size:.78rem;}
+    .meta-grid strong{display:block;font-size:.65rem;color:#6c757d;text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px;}
+    h2.sec{font-size:.95rem;color:#002b5c;margin:14px 0 6px;border-bottom:2px solid #00a8e8;padding-bottom:3px;}
+    table{width:100%;border-collapse:collapse;font-size:.78rem;margin-top:4px;page-break-inside:auto;}
+    thead{display:table-header-group;} tfoot{display:table-footer-group;}
+    th,td{border:1px solid #cfd4da;padding:4px 6px;vertical-align:middle;overflow-wrap:break-word;word-break:break-word;}
+    th{background:#002b5c;color:#fff;font-weight:700;font-size:.72rem;text-transform:uppercase;letter-spacing:.3px;}
+    td.num,th.num{text-align:center;} td.aluno{text-align:left;min-width:120px;}
+    tr{page-break-inside:avoid;break-inside:avoid;}
+    tr.aprov td{background:#eaf7ee;} tr.rec td{background:#fff4e3;} tr.rep td{background:#fdecec;} tr.pend td{background:#f4f6f9;color:#6c757d;}
+    .resumo{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px;}
+    .resumo span{font-size:.75rem;font-weight:700;padding:5px 10px;border-radius:4px;}
+    .resumo .a{background:#e8f5e9;color:#2e7d32;}
+    .resumo .r{background:#fff3e0;color:#e65100;}
+    .resumo .p{background:#ffebee;color:#c62828;}
+    .resumo .n{background:#f1f3f5;color:#495057;}
+    .resumo .t{background:#e3f2fd;color:#0056b3;}
+    .bar-wrap{background:#e9ecef;border-radius:3px;height:10px;overflow:hidden;width:100%;}
+    .bar-inner{height:100%;border-radius:3px;}
+    .rodape{display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;font-size:.72rem;color:#6c757d;}
+    .ass{margin-top:42px;border-top:1px solid #495057;width:55%;text-align:center;padding-top:3px;color:#212529;}
+    .sit-aprov{color:#2e7d32;font-weight:700;}
+    .sit-rec{color:#e65100;font-weight:700;}
+    .sit-rep{color:#c62828;font-weight:700;}
+    .sit-pend{color:#6c757d;font-weight:700;}
+    @page { size: A4 portrait; margin: 12mm; }
+    @media print { .no-print{display:none!important;} body{padding:0;} }
+  </style>`;
+}
+
+function _lgPdfHoje(){ return new Date().toLocaleDateString('pt-BR'); }
+
+function _lgPdfCabecalho(prova, subtitulo){
+  const escola = (app.escola && app.escola.nome) || 'Escola';
+  const turma  = (cache.turmas||[]).find(t => t.id === prova.turmaId);
+  const tname  = turma ? (turma.nome || '—') : '—';
+  return `
+  <div class="pe-faixa">
+    <h1>Leitor de <span>Gabaritos</span></h1>
+    <p>${subtitulo}</p>
+  </div>
+  <div class="pe-tricolor"><span class="y"></span><span class="r"></span><span class="c"></span></div>
+  <div class="meta-grid">
+    <div><strong>Escola</strong>${escapeHtml(escola)}</div>
+    <div><strong>Turma</strong>${escapeHtml(tname)}</div>
+    <div><strong>Prova</strong>${escapeHtml(prova.nome||'—')}</div>
+    <div><strong>Emitido em</strong>${_lgPdfHoje()}</div>
+  </div>`;
+}
+
+function _lgPdfRodape(){
+  return `<div class="rodape">
+    <div>Emitido em ${_lgPdfHoje()} · Leitor de Gabaritos</div>
+    <div class="ass">Assinatura do(a) professor(a)</div>
+  </div>`;
+}
+
+/* Abre o documento imprimível (APK: PrintManager · Web: nova janela) */
+function _lgAbrirJanelaImpressao(html, orientacao){
+  const o = orientacao==='landscape' ? 'landscape' : 'portrait';
+  const isApk = !!(window.AndroidApp && window.AndroidApp.gerarPDF);
+
+  const buildFullHtml = () => {
+    const style = _lgPdfEstilo().replace('@page { size: A4 portrait;', `@page { size: A4 ${o};`);
+    return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Leitor de Gabaritos — Impressão</title>
+${style}
+<style>body{padding:10mm 8mm;} .no-print{display:none!important;} @media print{.no-print{display:none!important;}}</style>
+</head>
+<body class="${o}">
+${html}
+</body>
+</html>`;
+  };
+
+  /* ── Modo APK ── */
+  if(isApk){
+    document.getElementById('lg-print-overlay')?.remove();
+    document.getElementById('lg-print-style')?.remove();
+    const fullHtml = buildFullHtml();
+
+    const styleEl = document.createElement('style');
+    styleEl.id = 'lg-print-style';
+    styleEl.textContent = `
+      #lg-print-overlay{position:fixed;inset:0;z-index:99999;background:#e8eaed;display:flex;flex-direction:column;overflow:hidden;}
+      #lg-print-overlay .lg-bar{flex-shrink:0;display:flex;align-items:center;gap:8px;padding:10px 14px;background:#002b5c;}
+      #lg-print-overlay .lg-bar span{flex:1;font-weight:700;color:#fff;font-size:.95rem;}
+      #lg-print-overlay .lg-bar button{background:#1a6fd4;color:#fff;border:none;padding:10px 18px;border-radius:6px;font-weight:700;cursor:pointer;font-size:.95rem;-webkit-tap-highlight-color:transparent;}
+      #lg-print-overlay .lg-bar button.cinza{background:#546e7a;}
+      #lg-preview-scroll{flex:1;overflow:auto;padding:16px;}
+      #lg-preview-page{background:#fff;max-width:794px;margin:0 auto;padding:16mm 12mm;box-shadow:0 2px 12px rgba(0,0,0,.2);min-height:400px;font-family:Arial,sans-serif;font-size:12px;}
+    `;
+    document.head.appendChild(styleEl);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'lg-print-overlay';
+    overlay.innerHTML = `
+      <div class="lg-bar">
+        <span>📄 Prévia — pronto para imprimir</span>
+        <button type="button" id="lg-close-btn" class="cinza">✕ Fechar</button>
+        <button type="button" id="lg-print-btn">🖨️ Salvar PDF</button>
+      </div>
+      <div id="lg-preview-scroll"><div id="lg-preview-page"></div></div>
+    `;
+    document.body.appendChild(overlay);
+
+    const bodyContent = fullHtml.replace(/[\s\S]*<body[^>]*>/i,'').replace(/<\/body>[\s\S]*/i,'');
+    document.getElementById('lg-preview-page').innerHTML = bodyContent;
+
+    document.getElementById('lg-close-btn').addEventListener('click', () => {
+      overlay.remove(); styleEl.remove();
+    });
+    document.getElementById('lg-print-btn').addEventListener('click', () => {
+      try {
+        if(window.AndroidApp && window.AndroidApp.gerarPDFIframe){
+          window.AndroidApp.gerarPDFIframe(fullHtml);
+        } else if(window.AndroidApp && window.AndroidApp.gerarPDF){
+          window.AndroidApp.gerarPDF();
+        }
+      } catch(e){
+        console.error('Erro ao gerar PDF:', e);
+        try { window.AndroidApp.gerarPDF(); } catch(_e){}
+      }
+    });
+    return;
+  }
+
+  /* ── Modo web: nova janela com auto-print ── */
+  const fullHtml = buildFullHtml().replace('</body>', `
+<div class="no-print" style="position:fixed;top:10px;right:10px;display:flex;gap:8px;z-index:9999;">
+  <button onclick="window.print()" style="background:#0056b3;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem;">🖨️ Imprimir / Salvar PDF</button>
+  <button onclick="window.close()" style="background:#6c757d;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem;">✕ Fechar</button>
+</div>
+<script>window.onload=function(){setTimeout(function(){window.print();},500);};<\/script>
+</body>`);
+
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if(!win){
+    toast && toast('Permita popups para gerar o PDF (ou use Ctrl+P).','warn');
+    return;
+  }
+  win.document.open(); win.document.write(fullHtml); win.document.close();
+}
+
+/* ─── EXPORTAÇÃO: tela de RESULTADOS de uma prova ─── */
+async function exportarResultadosPDF(){
+  try{
+    const { provaId, filtroTurma, busca } = _resStateProva;
+    if(!provaId){ toast && toast('Abra uma prova primeiro','warn'); return; }
+    await loadCache();
+    const resultados = await loadResultados();
+    const prova = (cache.provas||[]).find(p => p.id === provaId);
+    if(!prova){ toast && toast('Prova não encontrada','error'); return; }
+
+    let alunos = cache.alunos || [];
+    if(prova.turmaId) alunos = alunos.filter(a => a.turmaId === prova.turmaId);
+    else if(filtroTurma && filtroTurma !== 'all') alunos = alunos.filter(a => a.turmaId === filtroTurma);
+    if(busca){
+      const q = busca.toLowerCase();
+      alunos = alunos.filter(a => (a.nome||'').toLowerCase().includes(q));
+    }
+    alunos = [...alunos].sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'));
+
+    const resPorAluno = {};
+    for(const r of resultados){ if(r.provaId === provaId) resPorAluno[r.alunoId] = r; }
+    const corrigidos = Object.values(resPorAluno);
+    const somaNotas = corrigidos.reduce((s,r) => s + (r.nota||0), 0);
+    const media = corrigidos.length ? somaNotas / corrigidos.length : 0;
+    const aprovados = corrigidos.filter(r => r.notaMax && (r.nota/r.notaMax) >= 0.6).length;
+    const pctAprov = corrigidos.length ? Math.round((aprovados / corrigidos.length) * 100) : 0;
+
+    const lista = prova.turmaId ? alunos : alunos.filter(a => resPorAluno[a.id]);
+    const extrasIds = corrigidos.map(r => r.alunoId).filter(id => !lista.find(a => a.id === id));
+    const extras = extrasIds.map(id => ({ id, nome: resPorAluno[id].alunoNome || '(removido)' }));
+    const finalArr = [...lista, ...extras];
+
+    const linhas = finalArr.map((a, i) => {
+      const r = resPorAluno[a.id];
+      if(!r){
+        return `<tr class="pend"><td class="num">${i+1}</td><td class="aluno">${escapeHtml(a.nome)}</td>
+                <td class="num">—</td><td class="num">—</td><td class="num">—</td>
+                <td class="num sit-pend">Pendente</td></tr>`;
+      }
+      const pct = r.notaMax ? (r.nota/r.notaMax) : 0;
+      const cls = pct >= 0.7 ? 'aprov' : pct >= 0.5 ? 'rec' : 'rep';
+      const sit = pct >= 0.6 ? '<span class="sit-aprov">Aprovado</span>'
+                : pct >= 0.5 ? '<span class="sit-rec">Recuperação</span>'
+                : '<span class="sit-rep">Reprovado</span>';
+      return `<tr class="${cls}"><td class="num">${i+1}</td><td class="aluno">${escapeHtml(a.nome)}</td>
+              <td class="num">${fmtNota(r.nota||0)}</td>
+              <td class="num">${r.notaMax ? fmtNota(r.notaMax) : '—'}</td>
+              <td class="num">${Math.round(pct*100)}%</td>
+              <td class="num">${sit}</td></tr>`;
+    }).join('');
+
+    const html = `
+      ${_lgPdfCabecalho(prova, 'Resultados da prova')}
+      <div class="resumo">
+        <span class="t">Corrigidos: ${corrigidos.length}/${alunos.length || corrigidos.length}</span>
+        <span class="a">Média: ${corrigidos.length ? fmtNota(media) : '—'}</span>
+        <span class="a">Aprovação: ${corrigidos.length ? pctAprov+'%' : '—'}</span>
+      </div>
+      <h2 class="sec">Resultados por aluno</h2>
+      <table>
+        <thead><tr>
+          <th class="num" style="width:32px">#</th>
+          <th class="aluno">Aluno</th>
+          <th class="num">Nota</th>
+          <th class="num">Máx.</th>
+          <th class="num">%</th>
+          <th class="num">Situação</th>
+        </tr></thead>
+        <tbody>${linhas || '<tr><td colspan="6" class="num">Nenhum resultado.</td></tr>'}</tbody>
+      </table>
+      ${_lgPdfRodape()}
+    `;
+    _lgAbrirJanelaImpressao(html, 'portrait');
+  }catch(e){
+    console.error(e);
+    toast && toast('Erro ao gerar PDF: '+e.message, 'error');
+  }
+}
+
+/* ─── EXPORTAÇÃO: tela de RELATÓRIO PEDAGÓGICO ─── */
+async function exportarRelatorioPDF(){
+  try{
+    const p = _rel.prova;
+    const res = _rel.resultados || [];
+    if(!p){ toast && toast('Abra um relatório primeiro','warn'); return; }
+
+    const nQ = p.numQuestoes;
+    const nA = p.numAlternativas || 5;
+    const letras = 'ABCDE'.slice(0, nA).split('');
+    const total = res.length;
+
+    const contAlt = {};
+    for(let q=1;q<=nQ;q++){ contAlt[q] = {}; letras.forEach(l => contAlt[q][l]=0); contAlt[q]['branco']=0; }
+    for(const r of res){
+      for(let q=1;q<=nQ;q++){
+        const resp = r.respostas?.[q];
+        if(!resp || resp==='ANULADA') contAlt[q]['branco']++;
+        else if(contAlt[q][resp]!==undefined) contAlt[q][resp]++;
+      }
+    }
+
+    const pctAcerto = {};
+    for(let q=1;q<=nQ;q++){
+      if(p.anuladas?.[q]){ pctAcerto[q]=100; continue; }
+      const gab = p.gabarito?.[q];
+      pctAcerto[q] = total>0 && gab ? Math.round((contAlt[q][gab]||0)/total*100) : 0;
+    }
+
+    const notas = res.map(r => r.notaMax>0 ? parseFloat(((r.nota/r.notaMax)*10).toFixed(2)) : 0);
+    const media = notas.length ? notas.reduce((a,b)=>a+b,0)/notas.length : 0;
+    const maior = notas.length ? Math.max(...notas) : 0;
+    const menor = notas.length ? Math.min(...notas) : 0;
+    const aprov = notas.filter(n => n>=6).length;
+    const pctAprov = total>0 ? Math.round(aprov/total*100) : 0;
+
+    const histo = [0,0,0,0,0];
+    for(const n of notas){ histo[Math.min(4, Math.floor(n/2))]++; }
+    const histoLabels = ['0–2','2–4','4–6','6–8','8–10'];
+    const histoCores  = ['#e31b23','#e31b23','#fdb913','#00a8e8','#00a8e8'];
+    const maxHisto = Math.max(1, ...histo);
+
+    const questoesOrd = [];
+    for(let q=1;q<=nQ;q++){ if(!p.anuladas?.[q]) questoesOrd.push({q, pct: pctAcerto[q]}); }
+    questoesOrd.sort((a,b)=> a.pct - b.pct);
+    const piores3 = questoesOrd.slice(0,3);
+
+    const ranking = [...res]
+      .map(r => ({ nome: r.alunoNome || '?', nota: r.notaMax>0 ? (r.nota/r.notaMax)*10 : 0 }))
+      .sort((a,b) => b.nota - a.nota);
+
+    const resumoBlock = `
+      <div class="resumo">
+        <span class="${media>=7?'a':media>=5?'r':'p'}">Média: ${media.toFixed(1)}</span>
+        <span class="${pctAprov>=70?'a':pctAprov>=50?'r':'p'}">Aprovação (≥6): ${pctAprov}%</span>
+        <span class="a">Maior: ${maior.toFixed(1)}</span>
+        <span class="p">Menor: ${total>0?menor.toFixed(1):'—'}</span>
+        <span class="t">Corrigidos: ${total}</span>
+      </div>`;
+
+    const pioresBlock = piores3.length && total>0 ? `
+      <h2 class="sec">Questões com menor acerto</h2>
+      <table>
+        <thead><tr><th class="num" style="width:60px">Questão</th><th class="num" style="width:80px">Gabarito</th><th class="num">% Acerto</th></tr></thead>
+        <tbody>
+          ${piores3.map(({q,pct}) => `<tr class="rep"><td class="num">Q${q}</td><td class="num">${p.gabarito?.[q]||'—'}</td><td class="num">${pct}%</td></tr>`).join('')}
+        </tbody>
+      </table>` : '';
+
+    const todasQsBlock = `
+      <h2 class="sec">Desempenho por questão</h2>
+      <table>
+        <thead><tr><th class="num" style="width:60px">Questão</th><th class="num" style="width:70px">Gabarito</th><th class="num">% Acerto</th><th>Distribuição</th></tr></thead>
+        <tbody>
+          ${Array.from({length:nQ},(_,i)=>i+1).map(q => {
+            const gab = p.gabarito?.[q];
+            const anulada = p.anuladas?.[q];
+            const pct = pctAcerto[q];
+            const cor = anulada ? '#fdb913' : pct>=70 ? '#00a8e8' : pct>=40 ? '#fdb913' : '#e31b23';
+            return `<tr>
+              <td class="num">Q${q}${anulada?' *':''}</td>
+              <td class="num">${gab||'—'}</td>
+              <td class="num">${anulada?'—':pct+'%'}</td>
+              <td><div class="bar-wrap"><div class="bar-inner" style="width:${anulada?100:pct}%;background:${cor}"></div></div></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      ${Object.values(p.anuladas||{}).some(Boolean) ? '<div style="font-size:.7rem;color:#6c757d;margin-top:4px">* Questão anulada</div>' : ''}`;
+
+    const histoBlock = total>0 ? `
+      <h2 class="sec">Distribuição de notas (0–10)</h2>
+      <table>
+        <thead><tr><th class="num" style="width:80px">Faixa</th><th class="num" style="width:80px">Alunos</th><th>Proporção</th></tr></thead>
+        <tbody>
+          ${histo.map((c,i) => `<tr>
+            <td class="num">${histoLabels[i]}</td>
+            <td class="num">${c}</td>
+            <td><div class="bar-wrap"><div class="bar-inner" style="width:${Math.round(c/maxHisto*100)}%;background:${histoCores[i]}"></div></div></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : '';
+
+    const distratoresBlock = total>0 ? `
+      <h2 class="sec">Distratores por alternativa</h2>
+      <table>
+        <thead><tr>
+          <th class="num" style="width:60px">Questão</th>
+          <th class="num" style="width:60px">Gab.</th>
+          ${letras.map(l => `<th class="num">${l}</th>`).join('')}
+          <th class="num">Branco</th>
+        </tr></thead>
+        <tbody>
+          ${Array.from({length:nQ},(_,i)=>i+1).filter(q => !p.anuladas?.[q]).map(q => {
+            const gab = p.gabarito?.[q];
+            return `<tr>
+              <td class="num">Q${q}</td>
+              <td class="num"><strong>${gab||'—'}</strong></td>
+              ${letras.map(l => {
+                const cnt = contAlt[q][l]||0;
+                const isGab = l===gab;
+                return `<td class="num" style="${isGab?'background:#e3f2fd;color:#0056b3;font-weight:700':''}">${cnt}</td>`;
+              }).join('')}
+              <td class="num">${contAlt[q]['branco']||0}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>` : '';
+
+    const rankingBlock = ranking.length ? `
+      <h2 class="sec">Ranking da turma</h2>
+      <table>
+        <thead><tr><th class="num" style="width:60px">Pos.</th><th class="aluno">Aluno</th><th class="num">Nota (0–10)</th></tr></thead>
+        <tbody>
+          ${ranking.map((r,i) => {
+            const cls = r.nota>=7 ? 'aprov' : r.nota>=5 ? 'rec' : 'rep';
+            const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':('#'+(i+1));
+            return `<tr class="${cls}"><td class="num">${medal}</td><td class="aluno">${escapeHtml(r.nome)}</td><td class="num">${r.nota.toFixed(1)}</td></tr>`;
+          }).join('')}
+        </tbody>
+      </table>` : '';
+
+    const html = `
+      ${_lgPdfCabecalho(p, 'Relatório pedagógico')}
+      ${resumoBlock}
+      ${pioresBlock}
+      ${todasQsBlock}
+      ${histoBlock}
+      ${distratoresBlock}
+      ${rankingBlock}
+      ${_lgPdfRodape()}
+    `;
+    _lgAbrirJanelaImpressao(html, 'portrait');
+  }catch(e){
+    console.error(e);
+    toast && toast('Erro ao gerar PDF: '+e.message, 'error');
+  }
+}
+
 </script>
 
 </body>
