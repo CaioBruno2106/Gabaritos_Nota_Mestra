@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
-<title>Gabarito Nota Mestra</title>
+<title>Nota Mestra</title>
 <!-- build: v7 (Etapa 7 — Exportação JSON para Nota Mestra, formato de backup por turma, prova ou atividade) -->
 <!-- build anterior: v7a (Etapa A — Arquivar provas · Excluir correções · Nota por disciplina na conferência) -->
 
@@ -3124,6 +3124,16 @@ const app = {
 function isDono()  { return app.professor?.role === 'gestor'; }
 function isGestao(){ return app.professor?.role === 'gestor' || app.professor?.role === 'coordenador'; }
 function isGestor(){ return isGestao(); }  // compat: gestor==gestao (engloba coordenador)
+
+/* Quem pode excluir uma correção: gestão, quem criou a prova, ou quem corrigiu aquele cartão */
+function podeExcluirCorrecao(prova, resultado) {
+  if (isGestor()) return true;
+  const uid = app.user?.uid;
+  if (!uid) return false;
+  if (prova && prova.criadoPor === uid) return true;
+  if (resultado && resultado.corrigidoPor === uid) return true;
+  return false;
+}
 function papelLabel(r){ return r==='gestor'?'Gestor(a)':(r==='coordenador'?'Coordenação':'Professor(a)'); }
 
 /* ═══════════════════════════════════════════
@@ -6465,7 +6475,7 @@ async function renderResultadosProva() {
     const r = resPorAluno[a.id];
     if (r) {
       const cls = classNota(r.nota||0, r.notaMax||1);
-      const btnExcluir = isGestor()
+      const btnExcluir = podeExcluirCorrecao(prova, r)
         ? `<button class="icon-btn danger" title="Excluir correção" onclick="event.stopPropagation();excluirCorrecao('${r.id}','${escapeHtml(a.nome).replace(/'/g,"\\'")}','${provaId}')">🗑️</button>`
         : '';
       return `
@@ -6514,9 +6524,14 @@ async function renderResultadosProva() {
   }
 }
 
-/* ── Excluir correção individual (gestão) ── */
+/* ── Excluir correção individual (gestão, criador da prova, ou quem corrigiu) ── */
 function excluirCorrecao(resultadoId, nomeAluno, provaId) {
-  if (!isGestor()) return;
+  const prova = (cache.provas || []).find(p => p.id === provaId);
+  const resultado = (cacheRes.items || []).find(r => r.id === resultadoId);
+  if (!podeExcluirCorrecao(prova, resultado)) {
+    toast('Você não tem permissão para excluir esta correção', 'error');
+    return;
+  }
   showModal(`
     <div class="modal-handle"></div>
     <div class="modal-title">Excluir correção?</div>
