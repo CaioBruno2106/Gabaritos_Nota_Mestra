@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
-<title>Nota Mestra</title>
+<title>Gabarito Nota Mestra</title>
 <!-- build: v7 (Etapa 7 — Exportação JSON para Nota Mestra, formato de backup por turma, prova ou atividade) -->
 <!-- build anterior: v7a (Etapa A — Arquivar provas · Excluir correções · Nota por disciplina na conferência) -->
 
@@ -75,6 +75,21 @@ function escapeHtml(s) {
 function turmaNomeById(id) {
   const t = cache.turmas?.find(x => x.id === id);
   return t ? t.nome : '—';
+}
+
+/* ── Multiturma: provas podem estar vinculadas a uma ou mais turmas ──
+   Compatibilidade: provas antigas só têm `turmaId` (string única).
+   Provas novas têm `turmaIds` (array). Esta função normaliza os dois casos. */
+function provaTurmaIds(p) {
+  if (!p) return [];
+  if (Array.isArray(p.turmaIds) && p.turmaIds.length) return p.turmaIds;
+  if (p.turmaId) return [p.turmaId];
+  return [];
+}
+
+function turmasNomesById(ids) {
+  const arr = (ids || []).map(turmaNomeById).filter(Boolean);
+  return arr.length ? arr.join(', ') : '—';
 }
 
 /* ════════════════════════════════════════
@@ -661,7 +676,7 @@ async function renderProvas() {
     // Busca textual
     if (search && !(p.nome||'').toLowerCase().includes(search) && !(p.disciplina||'').toLowerCase().includes(search)) return false;
     // Filtro turma
-    if (_filtrosProvas.turmaId && p.turmaId !== _filtrosProvas.turmaId) return false;
+    if (_filtrosProvas.turmaId && !provaTurmaIds(p).includes(_filtrosProvas.turmaId)) return false;
     // Filtro disciplina
     if (_filtrosProvas.disciplina && !(p.disciplina||'').toLowerCase().includes(_filtrosProvas.disciplina.toLowerCase())) return false;
     // Filtro bimestre/unidade letiva
@@ -686,7 +701,7 @@ async function renderProvas() {
     return;
   }
   list.innerHTML = arr.map(p => {
-    const turmaNome = turmaNomeById(p.turmaId);
+    const turmaNome = turmasNomesById(provaTurmaIds(p));
     const isEscola = p.escopo === 'escola';
     const isArquivada = !!p.arquivada;
     const badgeEscopo = isEscola
@@ -724,7 +739,7 @@ function iniciarWizardProva() {
   wizard.editId = null;
   const anoAtual = new Date().getFullYear();
   wizard.data = {
-    nome: '', disciplina: '', turmaId: '',
+    nome: '', disciplina: '', turmaIds: [],
     bimestre: '1', anoLetivo: String(anoAtual),
     numQuestoes: 10,
     numAlternativas: 5, // A–E
@@ -815,7 +830,7 @@ function wizardStep1() {
           Defina cada disciplina com o intervalo de questões que lhe corresponde. O intervalo completo será definido após configurar o número total de questões.
         </div>
         <div id="w-discs-list">
-          ${renderDisciplinasConfig(d.disciplinasConfig, d.turmaId)}
+          ${renderDisciplinasConfig(d.disciplinasConfig, d.turmaIds)}
         </div>
         <button class="btn btn-ghost" style="margin-top:8px" onclick="adicionarDisciplinaConfig()">+ Adicionar disciplina</button>
         <div id="w-disc-aviso" style="font-size:12px;color:var(--yellow);margin-top:6px;display:${d.disciplinasConfig.length<2?'block':'none'}">
@@ -825,11 +840,16 @@ function wizardStep1() {
       ` }
 
       <div class="input-group">
-        <label class="input-label">Turma</label>
-        <select class="input" id="w-turma" style="cursor:pointer" onchange="wizard.data.turmaId=this.value; w1Check(); if(wizard.data.multidisciplinar) renderWizard()">
-          <option value="">— Selecione —</option>
-          ${turmas.map(t => `<option value="${t.id}" ${t.id===d.turmaId?'selected':''}>${escapeHtml(t.nome)}</option>`).join('')}
-        </select>
+        <label class="input-label">Turmas</label>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
+          Selecione uma ou mais turmas que vão fazer esta avaliação. Na correção, você escolhe a turma antes do aluno.
+        </div>
+        <div id="w-turmas-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
+          ${renderTurmasSelecionadas(d.turmaIds)}
+        </div>
+        <button class="btn btn-ghost" id="w-turmas-btn" style="font-size:12px;width:100%" onclick="abrirSeletorTurmasWizard()">
+          ${ d.turmaIds.length === 0 ? '+ Selecionar turmas' : '✏️ Editar turmas selecionadas' }
+        </button>
         ${turmas.length===0 ? '<div style="font-size:12px;color:var(--yellow);margin-top:4px">⚠️ Crie uma turma primeiro</div>' : ''}
       </div>
       <div class="input-group">
@@ -875,9 +895,71 @@ function wizardStep1() {
   `;
 }
 
-/* Renderiza a lista de disciplinas no bloco multidisciplinar */
-function renderDisciplinasConfig(lista, turmaId) {
+/* ── Seleção de turmas da prova (multiturma) ── */
+function renderTurmasSelecionadas(turmaIds) {
+  if (!turmaIds.length) {
+    return `<div style="font-size:12px;color:var(--text-dim)">Nenhuma turma selecionada ainda.</div>`;
+  }
+  return `<div style="display:flex;flex-wrap:wrap;gap:4px">
+    ${turmaIds.map(id => `<span class="badge badge-cyan" style="font-size:11px">${escapeHtml(turmaNomeById(id))}
+      <span style="cursor:pointer;margin-left:4px;opacity:.7" onclick="removerTurmaWizard('${id}')">✕</span>
+    </span>`).join('')}
+  </div>`;
+}
+
+function atualizarTurmasWizardUI() {
+  const el = document.getElementById('w-turmas-list');
+  if (el) el.innerHTML = renderTurmasSelecionadas(wizard.data.turmaIds);
+  const btn = document.getElementById('w-turmas-btn');
+  if (btn) btn.textContent = wizard.data.turmaIds.length === 0 ? '+ Selecionar turmas' : '✏️ Editar turmas selecionadas';
+  w1Check();
+  // Reflete a mudança no bloco multidisciplinar (label "nas turmas selecionadas")
+  const discEl = document.getElementById('w-discs-list');
+  if (discEl) discEl.innerHTML = renderDisciplinasConfig(wizard.data.disciplinasConfig, wizard.data.turmaIds);
+}
+
+function removerTurmaWizard(turmaId) {
+  wizard.data.turmaIds = wizard.data.turmaIds.filter(id => id !== turmaId);
+  atualizarTurmasWizardUI();
+}
+
+function abrirSeletorTurmasWizard() {
+  const turmas = cache.turmas || [];
+  const selecionadas = wizard.data.turmaIds || [];
+  if (!turmas.length) { toast('Crie uma turma primeiro', 'error'); return; }
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Selecionar turmas</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Marque todas as turmas que vão fazer esta prova.</div>
+    ${turmas.map(t => `
+      <label style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">
+        <input type="checkbox" id="wt-${t.id}" value="${t.id}"
+               ${selecionadas.includes(t.id)?'checked':''}
+               style="width:18px;height:18px;accent-color:var(--cyan);cursor:pointer">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--text)">${escapeHtml(t.nome||'—')}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${escapeHtml(t.turno||'')}</div>
+        </div>
+      </label>`).join('')}
+    <button class="btn btn-cyan" style="margin-top:12px" onclick="confirmarTurmasWizard()">Confirmar</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+function confirmarTurmasWizard() {
+  const turmas = cache.turmas || [];
+  const selecionadas = turmas
+    .filter(t => document.getElementById(`wt-${t.id}`)?.checked)
+    .map(t => t.id);
+  wizard.data.turmaIds = selecionadas;
+  closeModal();
+  atualizarTurmasWizardUI();
+}
+
+
+function renderDisciplinasConfig(lista, turmaIds) {
   if (!lista.length) return '<div style="font-size:13px;color:var(--text-dim);padding:8px 0">Nenhuma disciplina adicionada ainda.</div>';
+  const temTurma = Array.isArray(turmaIds) ? turmaIds.length > 0 : !!turmaIds;
 
   // Busca professores da escola para o seletor
   return lista.map((item, i) => `
@@ -907,7 +989,7 @@ function renderDisciplinasConfig(lista, turmaId) {
         </div>
       </div>
       <div class="input-group">
-        <label class="input-label" style="font-size:10px">Professor(a) responsável ${turmaId ? '(nesta turma)' : ''}</label>
+        <label class="input-label" style="font-size:10px">Professor(a) responsável ${temTurma ? '(nas turmas selecionadas)' : ''}</label>
         <select class="input" style="padding:8px 10px;font-size:13px;cursor:pointer"
                 onchange="wizard.data.disciplinasConfig[${i}].professorUid=this.value;wizard.data.disciplinasConfig[${i}].professorNome=this.options[this.selectedIndex].dataset.nome||''">
           <option value="">— Nenhum (opcional) —</option>
@@ -1019,7 +1101,7 @@ function adicionarDisciplinaConfig() {
   // Recarrega professores se necessário e re-renderiza
   carregarEquipe().then(() => {
     const el = document.getElementById('w-discs-list');
-    if (el) el.innerHTML = renderDisciplinasConfig(wizard.data.disciplinasConfig, wizard.data.turmaId);
+    if (el) el.innerHTML = renderDisciplinasConfig(wizard.data.disciplinasConfig, wizard.data.turmaIds);
     const aviso = document.getElementById('w-disc-aviso');
     if (aviso) aviso.style.display = wizard.data.disciplinasConfig.length < 2 ? 'block' : 'none';
     w1Check();
@@ -1029,7 +1111,7 @@ function adicionarDisciplinaConfig() {
 function removerDisciplinaConfig(i) {
   wizard.data.disciplinasConfig.splice(i, 1);
   const el = document.getElementById('w-discs-list');
-  if (el) el.innerHTML = renderDisciplinasConfig(wizard.data.disciplinasConfig, wizard.data.turmaId);
+  if (el) el.innerHTML = renderDisciplinasConfig(wizard.data.disciplinasConfig, wizard.data.turmaIds);
   const aviso = document.getElementById('w-disc-aviso');
   if (aviso) aviso.style.display = wizard.data.disciplinasConfig.length < 2 ? 'block' : 'none';
   w1Check();
@@ -1037,7 +1119,7 @@ function removerDisciplinaConfig(i) {
 
 function w1Valid() {
   const d = wizard.data;
-  if (!d.nome.trim() || !d.turmaId) return false;
+  if (!d.nome.trim() || !d.turmaIds.length) return false;
   if (d.multidisciplinar) {
     if (d.disciplinasConfig.length < 2) return false;
     return d.disciplinasConfig.every(c => c.nome.trim() && c.questaoInicio && c.questaoFim && c.questaoInicio <= c.questaoFim);
@@ -1223,7 +1305,8 @@ async function salvarProva() {
     const payload = {
       nome: d.nome.trim(),
       disciplina: d.multidisciplinar ? (d.disciplinasConfig.map(c=>c.nome).join(' / ')) : d.disciplina.trim(),
-      turmaId: d.turmaId,
+      turmaIds: d.turmaIds,
+      turmaId: d.turmaIds[0] || '', // compat: leitura antiga / exportações que esperam turma única
       bimestre: d.bimestre,
       anoLetivo: d.anoLetivo.trim(),
       numQuestoes: d.numQuestoes,
@@ -1259,7 +1342,7 @@ async function abrirProva(id) {
   if (!p) return;
   const content = document.getElementById('app-content');
   content.scrollTop = 0;
-  const turmaNome = turmaNomeById(p.turmaId);
+  const turmaNome = turmasNomesById(provaTurmaIds(p));
   const validas = p.numQuestoes - Object.values(p.anuladas||{}).filter(Boolean).length;
   const somaPesos = Object.entries(p.pesos||{}).filter(([q]) => !p.anuladas?.[q])
     .reduce((acc,[,v]) => acc + (parseFloat(v)||0), 0);
@@ -1367,7 +1450,7 @@ function editarProva(id) {
   wizard.data = {
     nome: p.nome || '',
     disciplina: p.disciplina || '',
-    turmaId: p.turmaId || '',
+    turmaIds: provaTurmaIds(p),
     bimestre: p.bimestre || '1',
     anoLetivo: p.anoLetivo || String(new Date().getFullYear()),
     numQuestoes: p.numQuestoes || 10,
@@ -4664,6 +4747,7 @@ function downloadPDF() {
 const corr = {
   provaId:   null,
   prova:     null,
+  turmaId:   null,    // turma escolhida (quando a prova tem mais de uma turma)
   alunoId:   null,
   aluno:     null,
   stream:    null,    // MediaStream ativo
@@ -4885,11 +4969,62 @@ async function iniciarCorrecao(provaId) {
 
   corr.provaId = provaId;
   corr.prova   = prova;
+  corr.turmaId = null;
   corr.alunoId = null;
   corr.aluno   = null;
 
+  const turmaIds = provaTurmaIds(prova);
+
+  if (turmaIds.length > 1) {
+    abrirSeletorTurmaCorrecao();
+  } else {
+    corr.turmaId = turmaIds[0] || null;
+    abrirSeletorAlunoCorrecao();
+  }
+}
+
+/* ── Passo 0 (apenas se a prova tiver mais de uma turma) — escolher a turma ── */
+function abrirSeletorTurmaCorrecao() {
+  const prova = corr.prova;
+  const turmaIds = provaTurmaIds(prova);
+  const turmasHtml = turmaIds.map(id => {
+    const t = (cache.turmas || []).find(x => x.id === id);
+    if (!t) return '';
+    const n = (cache.alunos || []).filter(a => a.turmaId === id).length;
+    return `
+      <div class="aluno-item" style="border-radius:var(--r-md);border:1px solid var(--border2);margin-bottom:6px;background:var(--surface)"
+           onclick="selecionarTurmaCorrecao('${id}')">
+        <div class="aluno-avatar">${initials(t.nome)}</div>
+        <div class="aluno-info">
+          <div class="aluno-name">${escapeHtml(t.nome)}</div>
+          <div class="aluno-sub">${n} aluno${n!==1?'s':''}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Selecionar turma</div>
+    <div style="font-size:13px;color:var(--text-muted);margin-top:-8px">${escapeHtml(prova.nome)}</div>
+    <div style="max-height:55vh;overflow-y:auto;padding-right:2px">${turmasHtml}</div>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+function selecionarTurmaCorrecao(turmaId) {
+  corr.turmaId = turmaId;
+  closeModal();
+  abrirSeletorAlunoCorrecao();
+}
+
+/* ── Passo 1 — escolher o aluno (dentro da turma já definida) ── */
+function abrirSeletorAlunoCorrecao() {
+  const prova = corr.prova;
+  const turmaIds = provaTurmaIds(prova);
+  const multiplasTurmas = turmaIds.length > 1;
+
   const alunosDaTurma = (cache.alunos || [])
-    .filter(a => a.turmaId === prova.turmaId)
+    .filter(a => a.turmaId === corr.turmaId)
     .sort((a, b) => (a.numeroLista || 999) - (b.numeroLista || 999) || a.nome.localeCompare(b.nome, 'pt-BR'));
 
   if (!alunosDaTurma.length) {
@@ -4910,7 +5045,10 @@ async function iniciarCorrecao(provaId) {
   showModal(`
     <div class="modal-handle"></div>
     <div class="modal-title">Selecionar aluno</div>
-    <div style="font-size:13px;color:var(--text-muted);margin-top:-8px">${escapeHtml(prova.nome)} · ${escapeHtml(prova.turmaNome||prova.turmaId)}</div>
+    <div style="font-size:13px;color:var(--text-muted);margin-top:-8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span>${escapeHtml(prova.nome)} · ${escapeHtml(turmaNomeById(corr.turmaId))}</span>
+      ${ multiplasTurmas ? `<span style="cursor:pointer;color:var(--cyan);font-weight:600" onclick="abrirSeletorTurmaCorrecao()">Trocar turma</span>` : '' }
+    </div>
     <div style="max-height:55vh;overflow-y:auto;padding-right:2px">${alunosHtml}</div>
     <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
   `);
@@ -5755,8 +5893,8 @@ async function executarSalvar() {
       provaId:    prova.id,
       provaNome:  prova.nome,
       disciplina: prova.disciplina || '',
-      turmaId:    prova.turmaId,
-      turmaNome:  prova.turmaNome || '',
+      turmaId:    corr.turmaId || corr.aluno.turmaId || '',
+      turmaNome:  turmaNomeById(corr.turmaId || corr.aluno.turmaId) || '',
       alunoId:    corr.alunoId,
       alunoNome:  corr.aluno.nome,
       respostas,
@@ -5873,7 +6011,7 @@ function renderListaProvasExportNM() {
   if (!el) return;
   const turmaId = _expNM.turmaId;
   const provasComResultado = (cache.provas || []).filter(p => {
-    if (p.turmaId !== turmaId) return false;
+    if (!provaTurmaIds(p).includes(turmaId)) return false;
     return (cacheRes.items || []).some(r => r.provaId === p.id);
   });
 
@@ -6190,7 +6328,8 @@ async function abrirResultadosProva(provaId) {
   await loadCache();
   const p = cache.provas.find(x => x.id === provaId);
   if (!p) { toast('Prova não encontrada','error'); return; }
-  _resStateProva = { provaId, filtroTurma: p.turmaId || 'all', busca: '' };
+  const turmaIdsIni = provaTurmaIds(p);
+  _resStateProva = { provaId, filtroTurma: turmaIdsIni.length === 1 ? turmaIdsIni[0] : 'all', busca: '' };
   const content = document.getElementById('app-content');
   content.scrollTop = 0;
   content.innerHTML = `
@@ -6230,18 +6369,25 @@ async function renderResultadosProva() {
   const prova = cache.provas.find(x => x.id === provaId);
   if (!prova) return;
 
-  // Alunos elegíveis: se a prova tem turmaId, só dessa turma. Senão, todos.
-  let alunos = cache.alunos || [];
-  if (prova.turmaId) alunos = alunos.filter(a => a.turmaId === prova.turmaId);
+  const turmaIds = provaTurmaIds(prova);
+  const multiplasTurmas = turmaIds.length > 1;
 
-  // Filtro de turma (só faz sentido se prova é da escola toda — sem turmaId)
+  // Alunos elegíveis: turma única → só dela; várias turmas → união delas; nenhuma (prova legada "escola toda") → todos.
+  let alunos = cache.alunos || [];
+  if (turmaIds.length === 1) alunos = alunos.filter(a => a.turmaId === turmaIds[0]);
+  else if (turmaIds.length > 1) alunos = alunos.filter(a => turmaIds.includes(a.turmaId));
+
+  // Filtro de turma: aparece quando a prova tem mais de uma turma (restrito a elas) ou nenhuma (todas da escola)
   const filtrosEl = document.getElementById('res-filtros');
-  if (!prova.turmaId && filtrosEl) {
-    const turmas = cache.turmas || [];
+  const mostrarFiltroTurma = multiplasTurmas || turmaIds.length === 0;
+  if (mostrarFiltroTurma && filtrosEl) {
+    const turmasOpts = multiplasTurmas
+      ? turmaIds.map(id => (cache.turmas||[]).find(t => t.id === id)).filter(Boolean)
+      : (cache.turmas || []);
     filtrosEl.innerHTML = `
       <select onchange="_resStateProva.filtroTurma=this.value; renderResultadosProva()">
         <option value="all" ${_resStateProva.filtroTurma==='all'?'selected':''}>Todas as turmas</option>
-        ${turmas.map(t => `<option value="${t.id}" ${_resStateProva.filtroTurma===t.id?'selected':''}>${escapeHtml(t.nome)}</option>`).join('')}
+        ${turmasOpts.map(t => `<option value="${t.id}" ${_resStateProva.filtroTurma===t.id?'selected':''}>${escapeHtml(t.nome)}</option>`).join('')}
       </select>
       <input type="text" placeholder="Buscar aluno..." value="${escapeHtml(_resStateProva.busca)}"
              oninput="_resStateProva.busca=this.value; renderResultadosProva()">
@@ -6260,7 +6406,18 @@ async function renderResultadosProva() {
     const q = _resStateProva.busca.toLowerCase();
     alunos = alunos.filter(a => (a.nome||'').toLowerCase().includes(q));
   }
-  alunos = [...alunos].sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'));
+
+  // Quando mostrando várias turmas juntas, ordena agrupando por turma (na ordem cadastrada na prova) e depois por nome
+  const agruparPorTurma = multiplasTurmas && _resStateProva.filtroTurma === 'all';
+  if (agruparPorTurma) {
+    alunos = [...alunos].sort((a, b) => {
+      const ia = turmaIds.indexOf(a.turmaId), ib = turmaIds.indexOf(b.turmaId);
+      if (ia !== ib) return ia - ib;
+      return (a.nome||'').localeCompare(b.nome||'', 'pt-BR');
+    });
+  } else {
+    alunos = [...alunos].sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'));
+  }
 
   // Mapa de resultados por alunoId desta prova
   const resPorAluno = {};
@@ -6293,18 +6450,18 @@ async function renderResultadosProva() {
     return;
   }
 
-  // Se a prova não tem turma vinculada, mostra apenas os alunos com resultado
-  const lista = prova.turmaId ? alunos : alunos.filter(a => resPorAluno[a.id]);
+  // Se a prova tem turma(s) vinculada(s), mostra todos os alunos elegíveis (mesmo pendentes); senão só quem já tem resultado
+  const lista = turmaIds.length > 0 ? alunos : alunos.filter(a => resPorAluno[a.id]);
   // Inclui resultados de alunos que talvez não estejam mais na turma
   const extrasIds = corrigidos.map(r => r.alunoId).filter(id => !lista.find(a => a.id === id));
   const extras = extrasIds.map(id => {
     const r = resPorAluno[id];
-    return { id, nome: r.alunoNome || '(removido)', _extra: true };
+    return { id, nome: r.alunoNome || '(removido)', turmaId: r.turmaId || null, _extra: true };
   });
 
   const finalArr = [...lista, ...extras];
 
-  listEl.innerHTML = finalArr.map(a => {
+  const rowHtml = (a) => {
     const r = resPorAluno[a.id];
     if (r) {
       const cls = classNota(r.nota||0, r.notaMax||1);
@@ -6331,7 +6488,30 @@ async function renderResultadosProva() {
         </div>
         <div class="res-nota">Pendente</div>
       </div>`;
-  }).join('');
+  };
+
+  if (agruparPorTurma) {
+    const grupos = {};
+    turmaIds.forEach(id => grupos[id] = []);
+    const outros = [];
+    finalArr.forEach(a => {
+      if (a.turmaId && grupos[a.turmaId]) grupos[a.turmaId].push(a);
+      else outros.push(a);
+    });
+    let html = '';
+    turmaIds.forEach(id => {
+      if (!grupos[id].length) return;
+      html += `<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;padding:14px 2px 6px">${escapeHtml(turmaNomeById(id))}</div>`;
+      html += grupos[id].map(rowHtml).join('');
+    });
+    if (outros.length) {
+      html += `<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;padding:14px 2px 6px">Outros</div>`;
+      html += outros.map(rowHtml).join('');
+    }
+    listEl.innerHTML = html;
+  } else {
+    listEl.innerHTML = finalArr.map(rowHtml).join('');
+  }
 }
 
 /* ── Excluir correção individual (gestão) ── */
@@ -6659,7 +6839,7 @@ async function abrirBoletimAluno(alunoId) {
 ════════════════════════════════════════════════════════════════ */
 
 /* Estado do relatório */
-const _rel = { provaId: null, prova: null, resultados: [], abaAtiva: 'questoes', chartInstances: [] };
+const _rel = { provaId: null, prova: null, resultados: [], abaAtiva: 'questoes', filtroTurma: 'all', chartInstances: [] };
 
 /* ─── Destrói todos os charts Chart.js ativos para evitar memory leak ─── */
 function relDestroyCharts() {
@@ -6692,6 +6872,8 @@ async function abrirRelatorio(provaId) {
   _rel.provaId = provaId;
   _rel.prova   = p;
   _rel.abaAtiva = 'questoes';
+  const turmaIdsRel = provaTurmaIds(p);
+  _rel.filtroTurma = turmaIdsRel.length === 1 ? turmaIdsRel[0] : 'all';
 
   // Carrega resultados
   const todos = await loadResultados();
@@ -6711,7 +6893,11 @@ function relRender(bodyEl) {
   relDestroyCharts();
 
   const p   = _rel.prova;
-  const res = _rel.resultados;
+  const turmaIdsRel = provaTurmaIds(p);
+  const multiplasTurmasRel = turmaIdsRel.length > 1;
+  const res = (multiplasTurmasRel && _rel.filtroTurma !== 'all')
+    ? _rel.resultados.filter(r => r.turmaId === _rel.filtroTurma)
+    : _rel.resultados;
   const nQ  = p.numQuestoes;
   const nA  = p.numAlternativas || 5;
   const letras = 'ABCDE'.slice(0, nA).split('');
@@ -6767,15 +6953,24 @@ function relRender(bodyEl) {
 
   // Ranking
   const ranking = [...res]
-    .map(r => ({ nome: r.alunoNome || '?', nota: r.notaMax > 0 ? (r.nota/r.notaMax)*10 : 0 }))
+    .map(r => ({ nome: r.alunoNome || '?', nota: r.notaMax > 0 ? (r.nota/r.notaMax)*10 : 0, turmaNome: r.turmaId ? turmaNomeById(r.turmaId) : '' }))
     .sort((a,b) => b.nota - a.nota);
+
+  // ── Seletor de turma (só aparece quando a prova tem mais de uma turma) ──
+  const filtroTurmaHtml = multiplasTurmasRel ? `
+    <div style="padding:0 16px 10px">
+      <select class="input" style="font-size:12px;padding:6px 8px;cursor:pointer" onchange="_rel.filtroTurma=this.value; relRender()">
+        <option value="all" ${_rel.filtroTurma==='all'?'selected':''}>Todas as turmas</option>
+        ${turmaIdsRel.map(id => `<option value="${id}" ${_rel.filtroTurma===id?'selected':''}>${escapeHtml(turmaNomeById(id))}</option>`).join('')}
+      </select>
+    </div>` : '';
 
   // ── HTML de resumo ──
   const resumoHtml = `
     <div class="rel-resumo-grid">
       <div class="rel-resumo-cell ${media >= 7 ? 'ok' : media >= 5 ? 'warn' : 'fail'}">
         <div class="rv">${media.toFixed(1)}</div>
-        <div class="rl">Média da turma</div>
+        <div class="rl">${multiplasTurmasRel && _rel.filtroTurma==='all' ? 'Média geral' : 'Média da turma'}</div>
       </div>
       <div class="rel-resumo-cell ${pctAprov >= 70 ? 'ok' : pctAprov >= 50 ? 'warn' : 'fail'}">
         <div class="rv">${pctAprov}%</div>
@@ -6858,14 +7053,15 @@ function relRender(bodyEl) {
     abaHtml = ranking.length === 0
       ? `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">🏆</div><div class="empty-title">Sem dados</div></div>`
       : `<div class="rel-card" style="padding:0 0 4px">
-          <div style="padding:12px 16px 0"><div class="rel-card-title">Ranking da turma</div></div>
+          <div style="padding:12px 16px 0"><div class="rel-card-title">${multiplasTurmasRel && _rel.filtroTurma==='all' ? 'Ranking geral' : 'Ranking da turma'}</div></div>
           ${ranking.map((r,i) => {
             const cls = r.nota >= 7 ? 'var(--cyan)' : r.nota >= 5 ? '#fdb913' : '#e31b23';
             const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+            const mostrarTurma = multiplasTurmasRel && _rel.filtroTurma==='all' && r.turmaNome;
             return `
               <div class="rel-rank-row">
                 <span class="rel-rank-pos">${medal||('#'+(i+1))}</span>
-                <span class="rel-rank-nome">${escapeHtml(r.nome)}</span>
+                <span class="rel-rank-nome">${escapeHtml(r.nome)}${mostrarTurma?` <span style="font-size:10px;color:var(--text-muted);font-weight:400">· ${escapeHtml(r.turmaNome)}</span>`:''}</span>
                 <span class="rel-rank-nota" style="color:${cls}">${r.nota.toFixed(1)}</span>
               </div>`;
           }).join('')}
@@ -6913,7 +7109,7 @@ function relRender(bodyEl) {
     }
   }
 
-  bodyEl.innerHTML = resumoHtml + (total > 0 ? pioresHtml + tabsHtml + abaHtml : '')
+  bodyEl.innerHTML = filtroTurmaHtml + resumoHtml + (total > 0 ? pioresHtml + tabsHtml + abaHtml : '')
     + (total > 0 ? `
       <div style="padding:16px 16px 32px">
         <button class="btn btn-primary" style="width:100%" onclick="exportarRelatorioPDF()">
@@ -7035,10 +7231,19 @@ function _lgPdfEstilo(){
 
 function _lgPdfHoje(){ return new Date().toLocaleDateString('pt-BR'); }
 
-function _lgPdfCabecalho(prova, subtitulo){
+function _lgPdfCabecalho(prova, subtitulo, turmaFiltro){
   const escola = (app.escola && app.escola.nome) || 'Escola';
-  const turma  = (cache.turmas||[]).find(t => t.id === prova.turmaId);
-  const tname  = turma ? (turma.nome || '—') : '—';
+  const turmaIds = provaTurmaIds(prova);
+  let tname;
+  if (turmaFiltro && turmaFiltro !== 'all') {
+    tname = turmaNomeById(turmaFiltro);
+  } else if (turmaIds.length > 1) {
+    tname = turmasNomesById(turmaIds); // "Todas as turmas" deste PDF
+  } else if (turmaIds.length === 1) {
+    tname = turmaNomeById(turmaIds[0]);
+  } else {
+    tname = '—';
+  }
   return `
   <div class="pe-faixa">
     <h1>Leitor de <span>Gabaritos</span></h1>
@@ -7154,16 +7359,59 @@ ${html}
 /* ─── EXPORTAÇÃO: tela de RESULTADOS de uma prova ─── */
 async function exportarResultadosPDF(){
   try{
-    const { provaId, filtroTurma, busca } = _resStateProva;
+    const { provaId } = _resStateProva;
     if(!provaId){ toast && toast('Abra uma prova primeiro','warn'); return; }
+    await loadCache();
+    const prova = (cache.provas||[]).find(p => p.id === provaId);
+    if(!prova){ toast && toast('Prova não encontrada','error'); return; }
+
+    const turmaIds = provaTurmaIds(prova);
+    if (turmaIds.length > 1) {
+      abrirSeletorTurmaPdfResultados(turmaIds);
+      return;
+    }
+    await _gerarResultadosPDF(turmaIds[0] || (_resStateProva.filtroTurma !== 'all' ? _resStateProva.filtroTurma : 'all'));
+  }catch(e){
+    console.error(e);
+    toast && toast('Erro ao gerar PDF: '+e.message, 'error');
+  }
+}
+
+/* ── Prova com mais de uma turma: pergunta qual turma deve sair no PDF de resultados ── */
+function abrirSeletorTurmaPdfResultados(turmaIds) {
+  const opcoes = turmaIds.map(id => `
+    <div class="aluno-item" style="border-radius:var(--r-md);border:1px solid var(--border2);margin-bottom:6px;background:var(--surface)"
+         onclick="closeModal();_gerarResultadosPDF('${id}')">
+      <div class="aluno-avatar">${initials(turmaNomeById(id))}</div>
+      <div class="aluno-info"><div class="aluno-name">${escapeHtml(turmaNomeById(id))}</div></div>
+    </div>`).join('');
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Gerar PDF de qual turma?</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Esta prova foi aplicada em mais de uma turma. Escolha o que deve sair no PDF.</div>
+    <div class="aluno-item" style="border-radius:var(--r-md);border:1px solid var(--border2);margin-bottom:6px;background:var(--surface)"
+         onclick="closeModal();_gerarResultadosPDF('all')">
+      <div class="aluno-avatar">📋</div>
+      <div class="aluno-info"><div class="aluno-name">Todas as turmas juntas</div></div>
+    </div>
+    ${opcoes}
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function _gerarResultadosPDF(turmaFiltro){
+  try{
+    const { provaId, busca } = _resStateProva;
     await loadCache();
     const resultados = await loadResultados();
     const prova = (cache.provas||[]).find(p => p.id === provaId);
     if(!prova){ toast && toast('Prova não encontrada','error'); return; }
+    const turmaIds = provaTurmaIds(prova);
 
     let alunos = cache.alunos || [];
-    if(prova.turmaId) alunos = alunos.filter(a => a.turmaId === prova.turmaId);
-    else if(filtroTurma && filtroTurma !== 'all') alunos = alunos.filter(a => a.turmaId === filtroTurma);
+    if (turmaFiltro && turmaFiltro !== 'all') alunos = alunos.filter(a => a.turmaId === turmaFiltro);
+    else if (turmaIds.length === 1) alunos = alunos.filter(a => a.turmaId === turmaIds[0]);
+    else if (turmaIds.length > 1) alunos = alunos.filter(a => turmaIds.includes(a.turmaId));
     if(busca){
       const q = busca.toLowerCase();
       alunos = alunos.filter(a => (a.nome||'').toLowerCase().includes(q));
@@ -7171,14 +7419,18 @@ async function exportarResultadosPDF(){
     alunos = [...alunos].sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'));
 
     const resPorAluno = {};
-    for(const r of resultados){ if(r.provaId === provaId) resPorAluno[r.alunoId] = r; }
+    for(const r of resultados){
+      if(r.provaId !== provaId) continue;
+      if(turmaFiltro && turmaFiltro !== 'all' && r.turmaId && r.turmaId !== turmaFiltro) continue;
+      resPorAluno[r.alunoId] = r;
+    }
     const corrigidos = Object.values(resPorAluno);
     const somaNotas = corrigidos.reduce((s,r) => s + (r.nota||0), 0);
     const media = corrigidos.length ? somaNotas / corrigidos.length : 0;
     const aprovados = corrigidos.filter(r => r.notaMax && (r.nota/r.notaMax) >= 0.6).length;
     const pctAprov = corrigidos.length ? Math.round((aprovados / corrigidos.length) * 100) : 0;
 
-    const lista = prova.turmaId ? alunos : alunos.filter(a => resPorAluno[a.id]);
+    const lista = turmaIds.length > 0 ? alunos : alunos.filter(a => resPorAluno[a.id]);
     const extrasIds = corrigidos.map(r => r.alunoId).filter(id => !lista.find(a => a.id === id));
     const extras = extrasIds.map(id => ({ id, nome: resPorAluno[id].alunoNome || '(removido)' }));
     const finalArr = [...lista, ...extras];
@@ -7203,7 +7455,7 @@ async function exportarResultadosPDF(){
     }).join('');
 
     const html = `
-      ${_lgPdfCabecalho(prova, 'Resultados da prova')}
+      ${_lgPdfCabecalho(prova, 'Resultados da prova', turmaFiltro)}
       <div class="resumo">
         <span class="t">Corrigidos: ${corrigidos.length}/${alunos.length || corrigidos.length}</span>
         <span class="a">Média: ${corrigidos.length ? fmtNota(media) : '—'}</span>
@@ -7232,10 +7484,46 @@ async function exportarResultadosPDF(){
 
 /* ─── EXPORTAÇÃO: tela de RELATÓRIO PEDAGÓGICO ─── */
 async function exportarRelatorioPDF(){
+  const p = _rel.prova;
+  if(!p){ toast && toast('Abra um relatório primeiro','warn'); return; }
+  const turmaIds = provaTurmaIds(p);
+  if (turmaIds.length > 1) {
+    abrirSeletorTurmaPdfRelatorio(turmaIds);
+    return;
+  }
+  await _gerarRelatorioPDF(_rel.filtroTurma);
+}
+
+/* ── Prova com mais de uma turma: pergunta qual turma deve sair no PDF do relatório ── */
+function abrirSeletorTurmaPdfRelatorio(turmaIds) {
+  const opcoes = turmaIds.map(id => `
+    <div class="aluno-item" style="border-radius:var(--r-md);border:1px solid var(--border2);margin-bottom:6px;background:var(--surface)"
+         onclick="closeModal();_gerarRelatorioPDF('${id}')">
+      <div class="aluno-avatar">${initials(turmaNomeById(id))}</div>
+      <div class="aluno-info"><div class="aluno-name">${escapeHtml(turmaNomeById(id))}</div></div>
+    </div>`).join('');
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Gerar PDF de qual turma?</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Esta prova foi aplicada em mais de uma turma. Escolha o que deve sair no PDF.</div>
+    <div class="aluno-item" style="border-radius:var(--r-md);border:1px solid var(--border2);margin-bottom:6px;background:var(--surface)"
+         onclick="closeModal();_gerarRelatorioPDF('all')">
+      <div class="aluno-avatar">📈</div>
+      <div class="aluno-info"><div class="aluno-name">Todas as turmas juntas</div></div>
+    </div>
+    ${opcoes}
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function _gerarRelatorioPDF(turmaFiltro){
   try{
     const p = _rel.prova;
-    const res = _rel.resultados || [];
     if(!p){ toast && toast('Abra um relatório primeiro','warn'); return; }
+    const turmaIds = provaTurmaIds(p);
+    const res = (turmaIds.length > 1 && turmaFiltro && turmaFiltro !== 'all')
+      ? (_rel.resultados || []).filter(r => r.turmaId === turmaFiltro)
+      : (_rel.resultados || []);
 
     const nQ = p.numQuestoes;
     const nA = p.numAlternativas || 5;
@@ -7278,7 +7566,7 @@ async function exportarRelatorioPDF(){
     const piores3 = questoesOrd.slice(0,3);
 
     const ranking = [...res]
-      .map(r => ({ nome: r.alunoNome || '?', nota: r.notaMax>0 ? (r.nota/r.notaMax)*10 : 0 }))
+      .map(r => ({ nome: r.alunoNome || '?', nota: r.notaMax>0 ? (r.nota/r.notaMax)*10 : 0, turmaNome: r.turmaId ? turmaNomeById(r.turmaId) : '' }))
       .sort((a,b) => b.nota - a.nota);
 
     const resumoBlock = `
@@ -7359,21 +7647,22 @@ async function exportarRelatorioPDF(){
         </tbody>
       </table>` : '';
 
+    const mostrarTurmaRanking = turmaIds.length > 1 && (!turmaFiltro || turmaFiltro==='all');
     const rankingBlock = ranking.length ? `
-      <h2 class="sec">Ranking da turma</h2>
+      <h2 class="sec">${mostrarTurmaRanking ? 'Ranking geral' : 'Ranking da turma'}</h2>
       <table>
-        <thead><tr><th class="num" style="width:60px">Pos.</th><th class="aluno">Aluno</th><th class="num">Nota (0–10)</th></tr></thead>
+        <thead><tr><th class="num" style="width:60px">Pos.</th><th class="aluno">Aluno</th>${mostrarTurmaRanking?'<th class="aluno">Turma</th>':''}<th class="num">Nota (0–10)</th></tr></thead>
         <tbody>
           ${ranking.map((r,i) => {
             const cls = r.nota>=7 ? 'aprov' : r.nota>=5 ? 'rec' : 'rep';
             const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':('#'+(i+1));
-            return `<tr class="${cls}"><td class="num">${medal}</td><td class="aluno">${escapeHtml(r.nome)}</td><td class="num">${r.nota.toFixed(1)}</td></tr>`;
+            return `<tr class="${cls}"><td class="num">${medal}</td><td class="aluno">${escapeHtml(r.nome)}</td>${mostrarTurmaRanking?`<td class="aluno">${escapeHtml(r.turmaNome||'—')}</td>`:''}<td class="num">${r.nota.toFixed(1)}</td></tr>`;
           }).join('')}
         </tbody>
       </table>` : '';
 
     const html = `
-      ${_lgPdfCabecalho(p, 'Relatório pedagógico')}
+      ${_lgPdfCabecalho(p, 'Relatório pedagógico', turmaFiltro)}
       ${resumoBlock}
       ${pioresBlock}
       ${todasQsBlock}
