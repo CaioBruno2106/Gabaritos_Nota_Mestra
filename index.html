@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
 <title>Leitor de Gabaritos</title>
-<!-- build: v7 (Pré-Etapa 7 — Disciplinas do Professor + Avaliação Multidisciplinar) -->
+<!-- build: v7a (Etapa A — Arquivar provas · Excluir correções · Nota por disciplina na conferência) -->
 
 <!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -25,6 +25,9 @@ const ref = {
 /* Cache em memória para listas (evita re-fetch a cada navegação) */
 const cache = { turmas: null, alunos: null, provas: null };
 
+/* Controle de exibição de provas arquivadas */
+let _showArquivadas = false;
+
 async function loadCache(force = false) {
   if (!app.escolaId) return;
   try {
@@ -38,6 +41,8 @@ async function loadCache(force = false) {
         cache.provas = s.docs
           .map(d => ({ id: d.id, ...d.data() }))
           .filter(p => {
+            // Se não está mostrando arquivadas, oculta as arquivadas
+            if (!_showArquivadas && p.arquivada) return false;
             // Gestor: vê provas da escola (escopo='escola') mas NÃO as particulares de professores
             if (gestor) return p.escopo !== 'proprio';
             // Professor: vê suas próprias + as da escola
@@ -512,11 +517,22 @@ function provas() {
       </div>
       <button class="btn-icon" onclick="iniciarWizardProva()">+</button>
     </div>
+    <div style="padding:0 16px 4px;display:flex;align-items:center;gap:8px">
+      <div class="chip ${_showArquivadas?'active':''}" onclick="toggleArquivadas()" style="cursor:pointer;font-size:12px">
+        📦 ${_showArquivadas ? 'Ocultar arquivadas' : 'Ver arquivadas'}
+      </div>
+    </div>
     <div id="provas-list" class="list-wrap">
       <div class="skel skel-card"></div>
       <div class="skel skel-card"></div>
     </div>
   `;
+}
+
+function toggleArquivadas() {
+  _showArquivadas = !_showArquivadas;
+  cache.provas = null; // força reload para pegar arquivadas também
+  renderProvas();
 }
 
 async function renderProvas() {
@@ -540,15 +556,19 @@ async function renderProvas() {
     const turmaNome = turmaNomeById(p.turmaId);
     const isEscola = p.escopo === 'escola';
     const isMinha  = p.criadoPor === app.user?.uid;
+    const isArquivada = !!p.arquivada;
     const badgeEscopo = isEscola
       ? `<span class="badge badge-cyan" style="font-size:10px">🏫 Escola</span>`
       : `<span class="badge badge-blue" style="font-size:10px">🔒 Particular</span>`;
+    const badgeArq = isArquivada
+      ? `<span class="badge" style="font-size:10px;background:rgba(122,154,191,0.15);color:var(--text-muted)">📦 Arquivada</span>`
+      : '';
     return `
-      <div class="list-card" onclick="abrirProva('${p.id}')">
+      <div class="list-card" onclick="abrirProva('${p.id}')" style="${isArquivada?'opacity:0.65':''}">
         <div class="list-card-icon ${isEscola ? 'cyan' : 'yellow'}">📋</div>
         <div class="list-card-body">
-          <div class="list-card-title" style="display:flex;align-items:center;gap:6px">
-            ${escapeHtml(p.nome)} ${badgeEscopo}
+          <div class="list-card-title" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            ${escapeHtml(p.nome)} ${badgeEscopo} ${badgeArq}
           </div>
           <div class="list-card-sub">${escapeHtml(p.disciplina||'')} · ${escapeHtml(turmaNome)} · ${p.numQuestoes||'?'} questões</div>
         </div>
@@ -1023,6 +1043,9 @@ async function abrirProva(id) {
       ${ p.escopo === 'escola'
         ? '<span class="badge badge-cyan" style="background:rgba(0,180,216,0.15)">🏫 Escola</span>'
         : '<span class="badge badge-blue" style="background:rgba(26,86,160,0.15)">🔒 Particular</span>' }
+      ${ p.arquivada
+        ? '<span class="badge" style="background:rgba(122,154,191,0.15);color:var(--text-muted)">📦 Arquivada</span>'
+        : '' }
     </div>
     <div class="info-grid">
       <div class="info-pill"><div class="info-pill-label">Questões</div><div class="info-pill-value">${p.numQuestoes}</div></div>
@@ -1089,7 +1112,10 @@ async function abrirProva(id) {
     </div>
 
     ${ (p.criadoPor === app.user?.uid || isGestor()) ? `
-    <div style="padding:0 16px 24px">
+    <div style="padding:0 16px 24px;display:flex;flex-direction:column;gap:8px">
+      <button class="btn btn-ghost" onclick="toggleArquivarProva('${p.id}', ${!!p.arquivada})">
+        ${ p.arquivada ? '📂 Desarquivar prova' : '📦 Arquivar prova' }
+      </button>
       <button class="btn btn-danger" onclick="excluirProva('${p.id}')">Excluir prova</button>
     </div>` : '' }
   `;
@@ -1138,6 +1164,36 @@ async function confirmaExcluirProva(id) {
     toast('Prova excluída', 'success');
     navTo('provas');
   } catch (e) { toast('Erro: '+e.message,'error'); }
+}
+
+/* ── Arquivar / Desarquivar prova ── */
+async function toggleArquivarProva(id, atualmenteArquivada) {
+  const novoEstado = !atualmenteArquivada;
+  const label = novoEstado ? 'arquivar' : 'desarquivar';
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">${novoEstado ? 'Arquivar prova?' : 'Desarquivar prova?'}</div>
+    <div style="font-size:14px;color:var(--text-muted);line-height:1.5;">
+      ${ novoEstado
+        ? 'A prova ficará oculta na listagem padrão. Você pode restaurá-la a qualquer momento em "Ver arquivadas".'
+        : 'A prova voltará a aparecer normalmente na listagem.' }
+    </div>
+    <button class="btn btn-cyan" id="btn-arq-confirm" onclick="confirmaArquivarProva('${id}', ${novoEstado})">
+      ${ novoEstado ? '📦 Arquivar' : '📂 Desarquivar' }
+    </button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function confirmaArquivarProva(id, arquivar) {
+  setLoading('btn-arq-confirm', true);
+  try {
+    await ref.provas().doc(id).update({ arquivada: arquivar });
+    cache.provas = null;
+    closeModal();
+    toast(arquivar ? 'Prova arquivada' : 'Prova restaurada', 'success');
+    navTo('provas');
+  } catch (e) { toast('Erro: '+e.message, 'error'); }
 }
 
 /* Limpa o cache ao trocar de escola (sign out) */
@@ -3146,7 +3202,7 @@ function mais() {
   </div>
 
   <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:11px;">
-    Leitor de Gabaritos v7 · Pré-Etapa 7
+    Leitor de Gabaritos v7a · Etapa A
   </div>`;
 }
 
@@ -4982,10 +5038,28 @@ function renderQList() {
 function renderNota() {
   const footer = document.getElementById('e4-conf-footer');
   if (!footer) return;
-  const { nota, max } = calcularNota();
+  const { nota, max, notasPorDisciplina } = calcularNota();
   const duplas   = corr.duplas.filter(q => corr.revisao[q] === undefined).length;
   const vazias   = Object.keys(corr.detected).filter(q => !corr.detected[q] && corr.revisao[q] === undefined && !corr.prova.anuladas?.[q]).length;
   const avisos   = duplas + vazias;
+
+  // Bloco de nota por disciplina (exibido para qualquer corrector, só calculado localmente)
+  let disciplinasHtml = '';
+  if (notasPorDisciplina && Object.keys(notasPorDisciplina).length > 0) {
+    const linhas = Object.entries(notasPorDisciplina).map(([nome, nd]) => {
+      const pct = nd.max > 0 ? (nd.nota / nd.max) : 0;
+      const cor = pct >= 0.7 ? 'var(--cyan)' : pct >= 0.5 ? 'var(--yellow)' : '#e31b23';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:12px;color:var(--text-muted);flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${escapeHtml(nome)}</div>
+        <div style="font-size:14px;font-weight:800;color:${cor};margin-left:8px;flex-shrink:0">${nd.nota.toFixed(1)} <span style="font-size:10px;font-weight:400;color:var(--text-dim)">/ ${nd.max.toFixed(1)}</span></div>
+      </div>`;
+    }).join('');
+    disciplinasHtml = `
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--r-md);padding:8px 12px;margin-bottom:0">
+        <div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px">Nota por disciplina</div>
+        ${linhas}
+      </div>`;
+  }
 
   footer.innerHTML = `
     <div class="e4-nota-badge">
@@ -4993,6 +5067,7 @@ function renderNota() {
       <div class="e4-nota-value">${nota.toFixed(1)}</div>
       <div class="e4-nota-max">/ ${max.toFixed(1)}</div>
     </div>
+    ${disciplinasHtml}
     ${avisos > 0 ? `<div style="font-size:12px;color:var(--yellow);text-align:center;line-height:1.5">⚠️ ${duplas > 0 ? duplas+' dupla'+( duplas>1?'s':'')+' marcação' : ''} ${duplas>0&&vazias>0?'· ':''} ${vazias > 0 ? vazias+' questão'+( vazias>1?'ões':'')+' em branco' : ''} — toque para resolver</div>` : ''}
     <button class="btn btn-cyan" ${avisos>0?'style="opacity:.7"':''} onclick="confirmarSalvar()">
       ${avisos > 0 ? '⚠️ Salvar mesmo assim' : '✓ Confirmar e salvar'}
@@ -5006,16 +5081,42 @@ function calcularNota() {
   const nQ    = prova.numQuestoes;
   let acertos = 0, max = 0;
 
+  // Detalhe auxiliar para nota por disciplina
+  const detalheTemp = {};
   for (let q = 1; q <= nQ; q++) {
     const gabarito = prova.gabarito?.[q];
     const anulada  = prova.anuladas?.[q];
-    if (anulada) { continue; } // anulada: não entra no máximo nem no acerto (pode mudar conforme regra)
+    if (anulada) { detalheTemp[q] = { status: 'anulada', pontos: 0 }; continue; }
     const peso = parseFloat(prova.pesos?.[q] || 1);
     max += peso;
     const resp = corr.revisao[q] !== undefined ? corr.revisao[q] : corr.detected[q];
-    if (resp && resp !== 'ANULADA' && resp === gabarito) acertos += peso;
+    const ok = resp && resp !== 'ANULADA' && resp === gabarito;
+    if (ok) acertos += peso;
+    detalheTemp[q] = { status: ok ? 'correta' : !resp ? 'branco' : 'errada', pontos: ok ? peso : 0 };
   }
-  return { nota: acertos, max };
+
+  // Calcula nota por disciplina (prova multidisciplinar)
+  let notasPorDisciplina = null;
+  if (prova.multidisciplinar && Array.isArray(prova.disciplinasConfig) && prova.disciplinasConfig.length) {
+    notasPorDisciplina = {};
+    for (const dc of prova.disciplinasConfig) {
+      let dAcertos = 0, dMax = 0;
+      for (let q = (dc.questaoInicio||1); q <= (dc.questaoFim||nQ); q++) {
+        if (q < 1 || q > nQ) continue;
+        if (prova.anuladas?.[q]) continue;
+        const peso = parseFloat(prova.pesos?.[q] || 1);
+        dMax += peso;
+        if (detalheTemp[q]?.status === 'correta') dAcertos += peso;
+      }
+      notasPorDisciplina[dc.nome] = {
+        nota: parseFloat(dAcertos.toFixed(2)),
+        max:  parseFloat(dMax.toFixed(2)),
+        professorNome: dc.professorNome || ''
+      };
+    }
+  }
+
+  return { nota: acertos, max, notasPorDisciplina };
 }
 
 /* ══════════════════════════════════════
@@ -5509,14 +5610,18 @@ async function renderResultadosProva() {
     const r = resPorAluno[a.id];
     if (r) {
       const cls = classNota(r.nota||0, r.notaMax||1);
+      const btnExcluir = isGestor()
+        ? `<button class="icon-btn danger" title="Excluir correção" onclick="event.stopPropagation();excluirCorrecao('${r.id}','${escapeHtml(a.nome).replace(/'/g,"\\'")}','${provaId}')">🗑️</button>`
+        : '';
       return `
-        <div class="res-row" onclick="abrirDetalheResultado('${r.id}')">
+        <div class="res-row" onclick="abrirDetalheResultado('${r.id}')" style="display:flex;align-items:center;gap:10px">
           <div class="aluno-avatar">${escapeHtml(initials(a.nome))}</div>
-          <div class="res-aluno">
+          <div class="res-aluno" style="flex:1;min-width:0">
             <div class="res-aluno-nome">${escapeHtml(a.nome)}${a._extra?' <span style="font-size:10px;color:var(--text-muted)">(fora da turma)</span>':''}</div>
             <div class="res-aluno-sub">${r.notaMax ? `${fmtNota(r.nota)} de ${fmtNota(r.notaMax)} · ` : ''}${cls==='ok'?'Aprovado':cls==='warn'?'Recuperação':'Reprovado'}</div>
           </div>
           <div class="res-nota ${cls}">${fmtNota(r.nota||0)}</div>
+          ${btnExcluir}
         </div>`;
     }
     return `
@@ -5529,6 +5634,32 @@ async function renderResultadosProva() {
         <div class="res-nota">Pendente</div>
       </div>`;
   }).join('');
+}
+
+/* ── Excluir correção individual (gestão) ── */
+function excluirCorrecao(resultadoId, nomeAluno, provaId) {
+  if (!isGestor()) return;
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Excluir correção?</div>
+    <div style="font-size:14px;color:var(--text-muted);line-height:1.5;">
+      A correção de <strong style="color:var(--text)">${escapeHtml(nomeAluno)}</strong> será removida permanentemente.
+      O aluno voltará a aparecer como pendente.
+    </div>
+    <button class="btn btn-danger" id="btn-excl-corr" onclick="confirmaExcluirCorrecao('${resultadoId}','${provaId}')">Excluir correção</button>
+    <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function confirmaExcluirCorrecao(resultadoId, provaId) {
+  setLoading('btn-excl-corr', true);
+  try {
+    await ref.resultados().doc(resultadoId).delete();
+    cacheRes.items = null;
+    closeModal();
+    toast('Correção excluída', 'success');
+    renderResultadosProva();
+  } catch (e) { toast('Erro: ' + e.message, 'error'); setLoading('btn-excl-corr', false); }
 }
 
 /* ─────────────────────────────────────────
