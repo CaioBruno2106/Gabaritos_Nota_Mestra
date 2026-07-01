@@ -4409,7 +4409,14 @@ const nmLink = {
 /* Mantém sessão entre recarregamentos da página (persistência própria do app secundário) */
 nmAuth.onAuthStateChanged(user => {
   nmLink.user = user || null;
-  if (!user) { nmLink.turmas = []; nmLink.carregadoEm = null; }
+  if (!user) {
+    nmLink.turmas = [];
+    nmLink.carregadoEm = null;
+  } else if (!nmLink.turmas.length) {
+    // Sessão restaurada (ex.: reload da página) — busca as turmas de novo,
+    // já que nmLink.turmas some quando a página recarrega (fica só em memória).
+    carregarTurmasNM(true);
+  }
   if (app.currentNav === 'mais') navTo('mais'); // atualiza o texto do item no menu
 });
 
