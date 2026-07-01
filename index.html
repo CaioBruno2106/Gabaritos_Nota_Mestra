@@ -4838,6 +4838,28 @@ async function continuarImportacaoNM() {
   });
 
   _impNM.pares = pares; // guardado pra Etapa 4 (envio de verdade)
+
+  // Fechamento do ciclo (Etapa 7): se essa mesma combinação já foi enviada
+  // antes, consulta o status REAL dela lá no Nota Mestra agora — em vez de
+  // só avisar "você já mandou isso", diz se já foi aplicado, se ainda está
+  // esperando revisão, ou se foi excluído sem ser aplicado.
+  const envioAnterior = (prova?.importsNM || []).find(i =>
+    i.turmaDestinoId === _impNM.turmaId && i.unidadeId === _impNM.unidadeId &&
+    i.tipo === _impNM.tipo && (i.atividadeAlvo || null) === (_impNM.tipo === 'atividade' ? _impNM.atividadeAlvo : null)
+  );
+  _impNM.envioAnterior = envioAnterior || null;
+  _impNM.envioAnteriorStatus = null;
+  if (envioAnterior?.nmDocId) {
+    try {
+      const snap = await nmDb.collection('users').doc(nmLink.user.uid)
+        .collection('turmas').doc(_impNM.turmaId)
+        .collection('importsPendentes').doc(envioAnterior.nmDocId).get();
+      _impNM.envioAnteriorStatus = snap.exists ? (snap.data().status || 'pendente') : 'excluido';
+    } catch (e) {
+      console.warn('Não consegui checar o status do envio anterior:', e.message);
+    }
+  }
+
   renderConfirmacaoImportacaoNM();
 }
 
@@ -4858,11 +4880,10 @@ function renderConfirmacaoImportacaoNM() {
   const provaNaoVale10 = maxProva !== null && Math.abs(maxProva - 10) > 0.01;
 
   // Já foi enviada essa mesma combinação (turma+unidade+tipo+atividade) antes?
-  // Não bloqueia — só avisa, pra não duplicar sem perceber.
-  const envioAnterior = (prova?.importsNM || []).find(i =>
-    i.turmaDestinoId === _impNM.turmaId && i.unidadeId === _impNM.unidadeId &&
-    i.tipo === _impNM.tipo && (i.atividadeAlvo || null) === (_impNM.tipo === 'atividade' ? _impNM.atividadeAlvo : null)
-  );
+  // O status real (consultado em continuarImportacaoNM) já veio pronto —
+  // não bloqueia o reenvio, só ajuda o professor a decidir com informação certa.
+  const envioAnterior = _impNM.envioAnterior;
+  const statusAnterior = _impNM.envioAnteriorStatus;
 
   const linhas = pares.map(p => `
     <tr>
@@ -4894,12 +4915,33 @@ function renderConfirmacaoImportacaoNM() {
         ajuste os pesos da prova no Leitor pra somarem 10 antes de importar.
       </div>` : '' }
 
-    ${ envioAnterior ? `
-      <div class="nm-msg error" style="margin-bottom:8px">
+    ${ envioAnterior ? (() => {
+      const dataEnvio = new Date(envioAnterior.enviadoEm).toLocaleString('pt-BR');
+      if (statusAnterior === 'aplicado') {
+        return `<div class="nm-msg" style="margin-bottom:8px;background:rgba(76,217,100,0.12);border:1px solid rgba(76,217,100,0.3);color:#4CD964">
+          ✅ Você já importou isso em ${dataEnvio} (${envioAnterior.qtdAlunos} aluno(s)) e já foi <strong>aplicado</strong>
+          no Nota Mestra. Enviar de novo só faz sentido se for uma correção — as notas serão sobrescritas lá quando você aplicar de novo.
+        </div>`;
+      }
+      if (statusAnterior === 'pendente') {
+        return `<div class="nm-msg error" style="margin-bottom:8px">
+          ⏳ Você já importou isso em ${dataEnvio} (${envioAnterior.qtdAlunos} aluno(s)), mas ainda está
+          <strong>esperando revisão</strong> lá no Nota Mestra — ninguém aplicou ainda. Considere revisar
+          aquele envio por lá em vez de mandar outro, pra não duplicar a fila de importação.
+        </div>`;
+      }
+      if (statusAnterior === 'excluido') {
+        return `<div class="nm-msg info" style="margin-bottom:8px">
+          ℹ️ Você importou isso em ${dataEnvio}, mas foi <strong>excluído</strong> sem ser aplicado — pode
+          enviar de novo tranquilamente.
+        </div>`;
+      }
+      return `<div class="nm-msg error" style="margin-bottom:8px">
         ⚠️ Você já importou essa mesma combinação (turma, unidade, ${_impNM.tipo === 'prova' ? 'prova' : 'atividade'})
-        em ${new Date(envioAnterior.enviadoEm).toLocaleString('pt-BR')} (${envioAnterior.qtdAlunos} aluno(s)).
-        Enviar de novo pode duplicar notas lá no Nota Mestra se você já confirmou aquele envio.
-      </div>` : '' }
+        em ${dataEnvio} (${envioAnterior.qtdAlunos} aluno(s)), mas não consegui confirmar o status atual lá no
+        Nota Mestra agora. Enviar de novo pode duplicar notas se aquele envio já tiver sido aplicado.
+      </div>`;
+    })() : '' }
 
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
       <span class="badge badge-cyan">${enviaveis.length} pronto(s) pra enviar</span>
@@ -4970,12 +5012,13 @@ async function confirmarEnvioNM() {
       criadoEm:      firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    await nmDb.collection('users').doc(nmLink.user.uid)
+    const docRef = await nmDb.collection('users').doc(nmLink.user.uid)
       .collection('turmas').doc(turmaDestino.id)
       .collection('importsPendentes').add(payload);
 
     // Marca na própria prova (no Leitor) que essa combinação já foi enviada —
-    // usado só pra mostrar aviso se o professor tentar importar de novo.
+    // guarda o ID do documento lá no Nota Mestra pra poder consultar o status
+    // real (pendente/aplicado) depois, sem precisar confiar só na memória local.
     try {
       await ref.provas().doc(prova.id).set({
         importsNM: firebase.firestore.FieldValue.arrayUnion({
@@ -4984,7 +5027,8 @@ async function confirmarEnvioNM() {
           tipo:           _impNM.tipo,
           atividadeAlvo:  _impNM.tipo === 'atividade' ? _impNM.atividadeAlvo : null,
           qtdAlunos:      enviaveis.length,
-          enviadoEm:      Date.now() // client-side: arrayUnion não aceita serverTimestamp() dentro de objetos
+          enviadoEm:      Date.now(), // client-side: arrayUnion não aceita serverTimestamp() dentro de objetos
+          nmDocId:        docRef.id
         })
       }, { merge: true });
       cache.provas = null; // força recarregar na próxima abertura, já com o novo importsNM
