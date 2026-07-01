@@ -4620,10 +4620,10 @@ async function abrirImportacaoNM(provaId) {
     return;
   }
 
+  await loadCache();
   const prova = (cache.provas || []).find(p => p.id === provaId);
   if (!prova) { toast('Prova não encontrada', 'error'); return; }
 
-  await loadCache();
   await loadResultados();
   const temResultado = (cacheRes.items || []).some(r => r.provaId === prova.id);
   if (!temResultado) { toast('Essa prova ainda não tem nenhuma correção lançada', 'error'); return; }
@@ -4846,6 +4846,13 @@ function renderConfirmacaoImportacaoNM() {
   const enviaveis     = casados.filter(p => p.nota10 !== null);
   const casadosSemNota = casados.filter(p => p.nota10 === null);
 
+  // Já foi enviada essa mesma combinação (turma+unidade+tipo+atividade) antes?
+  // Não bloqueia — só avisa, pra não duplicar sem perceber.
+  const envioAnterior = (prova?.importsNM || []).find(i =>
+    i.turmaDestinoId === _impNM.turmaId && i.unidadeId === _impNM.unidadeId &&
+    i.tipo === _impNM.tipo && (i.atividadeAlvo || null) === (_impNM.tipo === 'atividade' ? _impNM.atividadeAlvo : null)
+  );
+
   const linhas = pares.map(p => `
     <tr>
       <td style="font-size:.75rem;padding:4px 6px">${escapeHtml(p.nomeOrigem)}</td>
@@ -4868,6 +4875,13 @@ function renderConfirmacaoImportacaoNM() {
       ${ _impNM.tipo === 'prova' ? 'Prova da unidade' : `Atividade (${_impNM.atividadeAlvo.replace('atv','')}ª)` }
       ${ _impNM.disciplina ? ' · ' + escapeHtml(_impNM.disciplina) : '' }
     </div>
+
+    ${ envioAnterior ? `
+      <div class="nm-msg error" style="margin-bottom:8px">
+        ⚠️ Você já importou essa mesma combinação (turma, unidade, ${_impNM.tipo === 'prova' ? 'prova' : 'atividade'})
+        em ${new Date(envioAnterior.enviadoEm).toLocaleString('pt-BR')} (${envioAnterior.qtdAlunos} aluno(s)).
+        Enviar de novo pode duplicar notas lá no Nota Mestra se você já confirmou aquele envio.
+      </div>` : '' }
 
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
       <span class="badge badge-cyan">${enviaveis.length} pronto(s) pra enviar</span>
@@ -4902,11 +4916,71 @@ function renderConfirmacaoImportacaoNM() {
   `);
 }
 
-/* Placeholder — a Etapa 4 (gravação na caixa de entrada do Nota Mestra) entra aqui. */
-function confirmarEnvioNM() {
-  const pacote = JSON.parse(JSON.stringify(_impNM));
-  console.log('[Importação NM] confirmado no Leitor — pronto pra enviar:', pacote);
-  toast('Confirmado! O envio de verdade entra na próxima etapa', 'success');
+/* ═══════════════════════════════════════════════════════════════
+   INTEGRAÇÃO NOTA MESTRA — ETAPA 4
+   Envio de verdade: grava o pacote confirmado em
+   users/{uid}/turmas/{turmaId}/importsPendentes no projeto do
+   Nota Mestra (a "caixa de entrada" que a Etapa 5/6 vai consumir
+   lá, com uma segunda confirmação antes de aplicar as notas).
+   Também marca a prova no Leitor como já enviada (nesta turma/
+   unidade/tipo), só pra avisar — não bloqueia — se tentar de novo.
+═══════════════════════════════════════════════════════════════ */
+
+async function confirmarEnvioNM() {
+  const prova        = (cache.provas || []).find(p => p.id === _impNM.provaId);
+  const turmaDestino = nmLink.turmas.find(t => t.id === _impNM.turmaId);
+  const unidade       = (turmaDestino?.unidades || []).find(u => u.id === _impNM.unidadeId);
+  if (!prova || !turmaDestino || !unidade) { toast('Erro ao confirmar importação', 'error'); return; }
+
+  const enviaveis = (_impNM.pares || []).filter(p => p.matchIdx >= 0 && p.nota10 !== null);
+  if (!enviaveis.length) { toast('Nenhum aluno pronto pra enviar', 'error'); return; }
+
+  setLoading('btn-imp-nm-confirmar', true);
+  try {
+    const payload = {
+      origem:        'leitor-gabaritos',
+      provaId:       prova.id,
+      provaNome:     prova.nome,
+      unidadeId:     _impNM.unidadeId,
+      unidadeLabel:  unidade.label,
+      disciplina:    _impNM.disciplina || null,
+      tipo:          _impNM.tipo, // 'prova' | 'atividade'
+      atividadeAlvo: _impNM.tipo === 'atividade' ? _impNM.atividadeAlvo : null,
+      alunos:        enviaveis.map(p => ({ nome: p.nomeDestino, nota: p.nota10 })),
+      status:        'pendente',
+      enviadoPor:    nmLink.user.email || nmLink.user.uid || null,
+      criadoEm:      firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    await nmDb.collection('users').doc(nmLink.user.uid)
+      .collection('turmas').doc(turmaDestino.id)
+      .collection('importsPendentes').add(payload);
+
+    // Marca na própria prova (no Leitor) que essa combinação já foi enviada —
+    // usado só pra mostrar aviso se o professor tentar importar de novo.
+    try {
+      await ref.provas().doc(prova.id).set({
+        importsNM: firebase.firestore.FieldValue.arrayUnion({
+          turmaDestinoId: turmaDestino.id,
+          unidadeId:      unidade.id,
+          tipo:           _impNM.tipo,
+          atividadeAlvo:  _impNM.tipo === 'atividade' ? _impNM.atividadeAlvo : null,
+          qtdAlunos:      enviaveis.length,
+          enviadoEm:      Date.now() // client-side: arrayUnion não aceita serverTimestamp() dentro de objetos
+        })
+      }, { merge: true });
+      cache.provas = null; // força recarregar na próxima abertura, já com o novo importsNM
+    } catch (e) {
+      console.warn('Não consegui marcar a prova como enviada (não bloqueia o envio principal):', e);
+    }
+
+    toast(`${enviaveis.length} nota(s) enviada(s) pro Nota Mestra! Confirme lá pra aplicar de verdade.`, 'success');
+    closeModal();
+  } catch (e) {
+    toast('Erro ao enviar pro Nota Mestra: ' + e.message, 'error');
+  } finally {
+    setLoading('btn-imp-nm-confirmar', false);
+  }
 }
 </script>
 
