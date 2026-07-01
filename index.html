@@ -4616,15 +4616,19 @@ async function abrirImportacaoNM(provaId) {
   const prova = (cache.provas || []).find(p => p.id === provaId);
   if (!prova) { toast('Prova não encontrada', 'error'); return; }
 
+  await loadCache();
   await loadResultados();
   const temResultado = (cacheRes.items || []).some(r => r.provaId === prova.id);
   if (!temResultado) { toast('Essa prova ainda não tem nenhuma correção lançada', 'error'); return; }
 
-  _impNM.provaId      = provaId;
-  _impNM.turmaId      = nmLink.turmas[0].id;
-  _impNM.disciplina   = prova.multidisciplinar ? (prova.disciplinasConfig?.[0]?.nome || '') : (prova.disciplina || '');
-  _impNM.tipo         = 'prova';
-  _impNM.unidadeId    = null;
+  const turmaIdsProva = provaTurmaIds(prova);
+
+  _impNM.provaId       = provaId;
+  _impNM.origemTurmaId = turmaIdsProva.length ? turmaIdsProva[0] : ((cache.turmas || [])[0]?.id || null);
+  _impNM.turmaId       = nmLink.turmas[0].id;
+  _impNM.disciplina    = prova.multidisciplinar ? (prova.disciplinasConfig?.[0]?.nome || '') : (prova.disciplina || '');
+  _impNM.tipo          = 'prova';
+  _impNM.unidadeId     = null;
   _impNM.atividadeAlvo = '';
 
   renderFormImportacaoNM();
@@ -4634,6 +4638,27 @@ function renderFormImportacaoNM() {
   const prova = (cache.provas || []).find(p => p.id === _impNM.provaId);
   const turma = nmLink.turmas.find(t => t.id === _impNM.turmaId);
   if (!prova || !turma) { closeModal(); toast('Erro ao montar formulário de importação', 'error'); return; }
+
+  const turmaIdsProva = provaTurmaIds(prova);
+  // Se a prova foi aplicada em mais de uma turma do Leitor, o professor precisa
+  // dizer de qual delas vêm os alunos/notas — senão fica ambíguo.
+  const origensPossiveis = turmaIdsProva.length
+    ? turmaIdsProva.map(id => (cache.turmas || []).find(t => t.id === id)).filter(Boolean)
+    : (cache.turmas || []);
+  const precisaEscolherOrigem = origensPossiveis.length > 1;
+
+  const origemPicker = precisaEscolherOrigem ? `
+    <div class="input-group">
+      <label class="input-label">Turma de origem (Leitor de Gabaritos)</label>
+      <select class="input" id="imp-nm-origem" onchange="_impNM.origemTurmaId=this.value">
+        ${origensPossiveis.map(t => `
+          <option value="${t.id}" ${t.id === _impNM.origemTurmaId ? 'selected' : ''}>${escapeHtml(t.nome)}</option>
+        `).join('')}
+      </select>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+        Essa prova foi aplicada em mais de uma turma. Escolha de qual turma vêm os alunos e notas.
+      </div>
+    </div>` : '';
 
   const discPicker = prova.multidisciplinar ? `
     <div class="input-group">
@@ -4655,13 +4680,14 @@ function renderFormImportacaoNM() {
   }
   const unidadeSel = unidades.find(u => u.id === _impNM.unidadeId) || null;
 
-  const podeContinuar = !!unidadeSel && (_impNM.tipo !== 'atividade' || !!_impNM.atividadeAlvo);
+  const podeContinuar = !!unidadeSel && (_impNM.tipo !== 'atividade' || !!_impNM.atividadeAlvo) && !!_impNM.origemTurmaId;
 
   showModal(`
     <div class="modal-handle"></div>
     <div class="modal-title">Importar para o Nota Mestra</div>
     <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">${escapeHtml(prova.nome)}</div>
 
+    ${origemPicker}
     ${discPicker}
 
     <div class="input-group">
@@ -4730,11 +4756,144 @@ function renderSeletorAtividadeNM(unidadeSel) {
     </div>`;
 }
 
-/* Placeholder — a Etapa 3 (tela de confirmação com aluno → nota) entra aqui. */
-function continuarImportacaoNM() {
+/* ═══════════════════════════════════════════════════════════════
+   INTEGRAÇÃO NOTA MESTRA — ETAPA 3
+   Confirmação #1 (no Leitor): casa os alunos da turma de origem
+   (Leitor) com os alunos da turma de destino (Nota Mestra) pelo
+   nome, calcula a nota de cada um na escala 0–10, e mostra tudo
+   pra revisão antes de qualquer envio. Ainda não grava/envia nada
+   de verdade — isso é a Etapa 4.
+═══════════════════════════════════════════════════════════════ */
+
+/* Normaliza nome pra comparação: sem acento, minúsculo, só letras/espaços.
+   Mesma lógica usada pelo Nota Mestra no import manual (_normNome lá). */
+function _normNomeNM(nome) {
+  return (nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+async function continuarImportacaoNM() {
+  const prova = (cache.provas || []).find(p => p.id === _impNM.provaId);
+  const turmaDestino = nmLink.turmas.find(t => t.id === _impNM.turmaId);
+  if (!prova || !turmaDestino || !_impNM.origemTurmaId) {
+    toast('Erro ao montar a confirmação', 'error');
+    return;
+  }
+
+  await loadCache();
+  await loadResultados();
+
+  const alunosOrigem = (cache.alunos || []).filter(a => a.turmaId === _impNM.origemTurmaId);
+  const alunosDestino = (turmaDestino.alunos || []).filter(Boolean);
+
+  const resPorAluno = {};
+  (cacheRes.items || []).forEach(r => { if (r.provaId === prova.id) resPorAluno[r.alunoId] = r; });
+
+  const discNome = prova.multidisciplinar ? _impNM.disciplina : null;
+
+  const pares = alunosOrigem.map(a => {
+    const r = resPorAluno[a.id];
+    let nota = null, max = null;
+    if (r) {
+      if (discNome && r.notasPorDisciplina && r.notasPorDisciplina[discNome]) {
+        nota = r.notasPorDisciplina[discNome].nota;
+        max  = r.notasPorDisciplina[discNome].max;
+      } else {
+        nota = r.nota;
+        max  = r.notaMax;
+      }
+    }
+    const notaNum = (nota !== null && nota !== undefined) ? parseFloat(nota) : NaN;
+    const nota10 = (max && !isNaN(notaNum)) ? arredondarNotaMestra((notaNum / max) * 10) : null;
+
+    const nNorm = _normNomeNM(a.nome);
+    const matchIdx = alunosDestino.findIndex(ad => _normNomeNM(ad.nome) === nNorm);
+
+    return {
+      alunoOrigemId: a.id,
+      nomeOrigem: a.nome,
+      nota10,
+      matchIdx,
+      nomeDestino: matchIdx >= 0 ? alunosDestino[matchIdx].nome : null
+    };
+  });
+
+  _impNM.pares = pares; // guardado pra Etapa 4 (envio de verdade)
+  renderConfirmacaoImportacaoNM();
+}
+
+function renderConfirmacaoImportacaoNM() {
+  const prova = (cache.provas || []).find(p => p.id === _impNM.provaId);
+  const turmaDestino = nmLink.turmas.find(t => t.id === _impNM.turmaId);
+  const unidade = (turmaDestino?.unidades || []).find(u => u.id === _impNM.unidadeId);
+  const pares = _impNM.pares || [];
+
+  const casados      = pares.filter(p => p.matchIdx >= 0);
+  const naoCasados    = pares.filter(p => p.matchIdx < 0);
+  const enviaveis     = casados.filter(p => p.nota10 !== null);
+  const casadosSemNota = casados.filter(p => p.nota10 === null);
+
+  const linhas = pares.map(p => `
+    <tr>
+      <td style="font-size:.75rem;padding:4px 6px">${escapeHtml(p.nomeOrigem)}</td>
+      <td style="font-size:.75rem;padding:4px 6px;text-align:center;font-weight:700">
+        ${p.nota10 !== null ? p.nota10.toFixed(1).replace('.0','').replace('.', ',') : '—'}
+      </td>
+      <td style="font-size:.75rem;padding:4px 6px;text-align:center">
+        ${ p.matchIdx >= 0
+          ? `<span style="color:#4CD964;font-weight:700">✓ ${escapeHtml(p.nomeDestino)}</span>`
+          : `<span style="color:var(--red);font-size:.7rem">Não encontrado</span>` }
+      </td>
+    </tr>`).join('');
+
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Confirmar importação</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+      ${escapeHtml(prova?.nome || '')} → <strong>${escapeHtml(turmaDestino?.nome || '')}</strong> ·
+      ${escapeHtml(unidade?.label || '')} ·
+      ${ _impNM.tipo === 'prova' ? 'Prova da unidade' : `Atividade (${_impNM.atividadeAlvo.replace('atv','')}ª)` }
+      ${ _impNM.disciplina ? ' · ' + escapeHtml(_impNM.disciplina) : '' }
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+      <span class="badge badge-cyan">${enviaveis.length} pronto(s) pra enviar</span>
+      ${ casadosSemNota.length ? `<span class="badge badge-yellow">${casadosSemNota.length} sem nota</span>` : '' }
+      ${ naoCasados.length ? `<span class="badge" style="background:rgba(230,57,70,0.15);color:var(--red)">${naoCasados.length} não encontrado(s)</span>` : '' }
+    </div>
+
+    <div style="max-height:44vh;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md)">
+      <table style="width:100%;border-collapse:collapse">
+        <thead style="position:sticky;top:0;background:var(--surface2)">
+          <tr>
+            <th style="font-size:.7rem;padding:4px 6px;text-align:left">Aluno (Leitor)</th>
+            <th style="font-size:.7rem;padding:4px 6px;text-align:center">Nota</th>
+            <th style="font-size:.7rem;padding:4px 6px;text-align:center">Casamento no Nota Mestra</th>
+          </tr>
+        </thead>
+        <tbody>${linhas || `<tr><td colspan="3" style="font-size:.75rem;padding:10px;text-align:center;color:var(--text-muted)">Nenhum aluno na turma de origem.</td></tr>`}</tbody>
+      </table>
+    </div>
+
+    ${ naoCasados.length ? `
+      <div class="nm-msg error" style="margin-top:8px">
+        ${naoCasados.length} aluno(s) não foram encontrados na turma do Nota Mestra (nome diferente?).
+        Eles não serão enviados nesta importação.
+      </div>` : '' }
+
+    <button class="btn btn-cyan" id="btn-imp-nm-confirmar" style="margin-top:10px" onclick="confirmarEnvioNM()"
+      ${ enviaveis.length ? '' : 'disabled' }>
+      ✅ Confirmar importação (${enviaveis.length} aluno${enviaveis.length === 1 ? '' : 's'})
+    </button>
+    <button class="btn btn-ghost" style="margin-top:8px" onclick="renderFormImportacaoNM()">‹ Voltar</button>
+  `);
+}
+
+/* Placeholder — a Etapa 4 (gravação na caixa de entrada do Nota Mestra) entra aqui. */
+function confirmarEnvioNM() {
   const pacote = JSON.parse(JSON.stringify(_impNM));
-  console.log('[Importação NM] pacote pronto pra confirmação:', pacote);
-  toast('Formulário OK — a confirmação entra na próxima etapa', 'success');
+  console.log('[Importação NM] confirmado no Leitor — pronto pra enviar:', pacote);
+  toast('Confirmado! O envio de verdade entra na próxima etapa', 'success');
 }
 </script>
 
