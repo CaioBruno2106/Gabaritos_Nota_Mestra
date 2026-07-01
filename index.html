@@ -1707,6 +1707,15 @@ html, body {
 .badge-yellow { background: rgba(245,166,35,0.15); color: var(--yellow); }
 .badge-blue  { background: rgba(26,86,160,0.25); color: #6BAEFF; }
 
+/* Mensagens inline em modais (usado na integração com o Nota Mestra) */
+.nm-msg {
+  padding: 10px 12px; border-radius: var(--r-md);
+  font-size: 12px; line-height: 1.5;
+}
+.nm-msg.success { background: rgba(0,180,216,0.12); border: 1px solid rgba(0,180,216,0.3); color: var(--cyan2); }
+.nm-msg.error   { background: rgba(230,57,70,0.1);  border: 1px solid rgba(230,57,70,0.3);  color: #FF8A8A; }
+.nm-msg.info    { background: rgba(122,154,191,0.1); border: 1px solid var(--border);        color: var(--text-muted); }
+
 /* Divider */
 .divider {
   display: flex; align-items: center; gap: 12px;
@@ -4415,7 +4424,7 @@ function abrirConexaoNM() {
       e a unidade letiva certas na hora de importar notas de uma prova corrigida.
     </div>
     ${ conectado ? `
-      <div class="ob-msg success" style="margin-bottom:10px">
+      <div class="nm-msg success" style="margin-bottom:10px">
         ✅ Conectado como <strong>${escapeHtml(nmLink.user.email || nmLink.user.displayName || '')}</strong><br>
         ${nmLink.turmas.length} turma(s) carregada(s) do Nota Mestra.
       </div>
@@ -4436,7 +4445,7 @@ function abrirConexaoNM() {
         <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px">
         Entrar com Google
       </button>
-      <div id="nm-login-msg" class="ob-msg" style="margin-top:8px"></div>
+      <div id="nm-login-msg" class="nm-msg" style="margin-top:8px"></div>
     `}
     <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Fechar</button>
   `);
@@ -4447,7 +4456,7 @@ async function loginNM() {
   const senha = document.getElementById('nm-login-senha').value;
   const msgEl = document.getElementById('nm-login-msg');
   if (!email || !senha) {
-    if (msgEl) { msgEl.textContent = 'Informe e-mail e senha.'; msgEl.className = 'ob-msg error'; }
+    if (msgEl) { msgEl.textContent = 'Informe e-mail e senha.'; msgEl.className = 'nm-msg error'; }
     return;
   }
   setLoading('btn-nm-entrar', true);
@@ -4458,7 +4467,7 @@ async function loginNM() {
     await carregarTurmasNM(true);
     abrirConexaoNM();
   } catch (e) {
-    if (msgEl) { msgEl.textContent = _traduzErroAuthNM(e); msgEl.className = 'ob-msg error'; }
+    if (msgEl) { msgEl.textContent = _traduzErroAuthNM(e); msgEl.className = 'nm-msg error'; }
   } finally {
     setLoading('btn-nm-entrar', false);
   }
@@ -4475,7 +4484,7 @@ async function loginNMGoogle() {
     await carregarTurmasNM(true);
     abrirConexaoNM();
   } catch (e) {
-    if (msgEl) { msgEl.textContent = _traduzErroAuthNM(e); msgEl.className = 'ob-msg error'; }
+    if (msgEl) { msgEl.textContent = _traduzErroAuthNM(e); msgEl.className = 'nm-msg error'; }
   } finally {
     setLoading('btn-nm-google', false);
   }
@@ -4549,6 +4558,183 @@ async function carregarTurmasNM(forcar) {
     nmLink.carregando = false;
     setLoading('btn-nm-atualizar', false);
   }
+
+  // Redesenha o modal de conexão (se ainda estiver aberto) e o item no menu Mais,
+  // pra refletir o novo total de turmas na tela — sem isso o toast avisava certo,
+  // mas a tela ficava com o número antigo até fechar e abrir o modal de novo.
+  if (document.getElementById('btn-nm-atualizar')) abrirConexaoNM();
+  if (app.currentNav === 'mais') navTo('mais');
+}
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   INTEGRAÇÃO NOTA MESTRA — ETAPA 2
+   Formulário de importação, aberto a partir da tela de Resultados
+   de uma prova corrigida: disciplina (se multidisciplinar), turma
+   de destino e unidade letiva (dados reais vindos do Nota Mestra,
+   carregados na Etapa 1), e se a nota é "prova da unidade" ou
+   "atividade" (e qual). Ainda não grava nada — o botão final só
+   monta o "pacote" que as próximas etapas (confirmação + envio)
+   vão consumir.
+═══════════════════════════════════════════════════════════════ */
+
+const _impNM = {
+  provaId: null, turmaId: null, unidadeId: null,
+  disciplina: null, tipo: 'prova', atividadeAlvo: ''
+};
+
+async function abrirImportacaoNM(provaId) {
+  if (!nmLink.user) {
+    showModal(`
+      <div class="modal-handle"></div>
+      <div class="modal-title">Conectar ao Nota Mestra</div>
+      <div class="nm-msg info" style="margin-bottom:10px">
+        Pra importar notas direto, primeiro conecte sua conta do Nota Mestra
+        (mesmo login que você usa lá).
+      </div>
+      <button class="btn btn-cyan" onclick="closeModal();abrirConexaoNM()">Conectar agora</button>
+      <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Cancelar</button>
+    `);
+    return;
+  }
+
+  if (!nmLink.turmas.length) {
+    showModal(`
+      <div class="modal-handle"></div>
+      <div class="modal-title">Nenhuma turma encontrada</div>
+      <div class="nm-msg error" style="margin-bottom:10px">
+        Não encontramos nenhuma turma no Nota Mestra pra essa conta. Verifique se
+        entrou com o login certo ou tente atualizar.
+      </div>
+      <button class="btn btn-cyan" onclick="closeModal();abrirConexaoNM()">Ver conexão</button>
+      <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Cancelar</button>
+    `);
+    return;
+  }
+
+  const prova = (cache.provas || []).find(p => p.id === provaId);
+  if (!prova) { toast('Prova não encontrada', 'error'); return; }
+
+  await loadResultados();
+  const temResultado = (cacheRes.items || []).some(r => r.provaId === prova.id);
+  if (!temResultado) { toast('Essa prova ainda não tem nenhuma correção lançada', 'error'); return; }
+
+  _impNM.provaId      = provaId;
+  _impNM.turmaId      = nmLink.turmas[0].id;
+  _impNM.disciplina   = prova.multidisciplinar ? (prova.disciplinasConfig?.[0]?.nome || '') : (prova.disciplina || '');
+  _impNM.tipo         = 'prova';
+  _impNM.unidadeId    = null;
+  _impNM.atividadeAlvo = '';
+
+  renderFormImportacaoNM();
+}
+
+function renderFormImportacaoNM() {
+  const prova = (cache.provas || []).find(p => p.id === _impNM.provaId);
+  const turma = nmLink.turmas.find(t => t.id === _impNM.turmaId);
+  if (!prova || !turma) { closeModal(); toast('Erro ao montar formulário de importação', 'error'); return; }
+
+  const discPicker = prova.multidisciplinar ? `
+    <div class="input-group">
+      <label class="input-label">Disciplina (prova multidisciplinar)</label>
+      <select class="input" id="imp-nm-disc" onchange="_impNM.disciplina=this.value">
+        ${(prova.disciplinasConfig || []).map(dc => `
+          <option value="${escapeHtml(dc.nome)}" ${dc.nome === _impNM.disciplina ? 'selected' : ''}>${escapeHtml(dc.nome)}</option>
+        `).join('')}
+      </select>
+    </div>` : '';
+
+  const unidades = turma.unidades || [];
+  // Garante que a unidade selecionada realmente pertence à turma atual —
+  // evita ficar com um unidadeId "órfão" de uma troca de turma anterior.
+  if (_impNM.unidadeId && !unidades.some(u => u.id === _impNM.unidadeId)) {
+    _impNM.unidadeId = unidades.length ? unidades[0].id : null;
+  } else if (!_impNM.unidadeId && unidades.length) {
+    _impNM.unidadeId = unidades[0].id;
+  }
+  const unidadeSel = unidades.find(u => u.id === _impNM.unidadeId) || null;
+
+  const podeContinuar = !!unidadeSel && (_impNM.tipo !== 'atividade' || !!_impNM.atividadeAlvo);
+
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Importar para o Nota Mestra</div>
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px">${escapeHtml(prova.nome)}</div>
+
+    ${discPicker}
+
+    <div class="input-group">
+      <label class="input-label">Turma de destino (Nota Mestra)</label>
+      <select class="input" id="imp-nm-turma" onchange="_impNM.turmaId=this.value;_impNM.unidadeId=null;renderFormImportacaoNM()">
+        ${nmLink.turmas.map(t => `
+          <option value="${t.id}" ${t.id === _impNM.turmaId ? 'selected' : ''}>
+            ${escapeHtml(t.nome)}${t.disciplina ? ' · ' + escapeHtml(t.disciplina) : ''}
+          </option>
+        `).join('')}
+      </select>
+    </div>
+
+    <div class="input-group">
+      <label class="input-label">Unidade letiva</label>
+      ${ unidades.length ? `
+        <select class="input" id="imp-nm-unidade" onchange="_impNM.unidadeId=this.value;renderFormImportacaoNM()">
+          ${unidades.map(u => `
+            <option value="${u.id}" ${u.id === _impNM.unidadeId ? 'selected' : ''}>${escapeHtml(u.label)}</option>
+          `).join('')}
+        </select>
+      ` : `
+        <div class="nm-msg error">Essa turma ainda não tem unidades letivas criadas no Nota Mestra.</div>
+      `}
+    </div>
+
+    <div class="input-group">
+      <label class="input-label">Essa nota conta como</label>
+      <div class="segmented" id="imp-nm-tipo-seg">
+        <div class="seg ${_impNM.tipo === 'prova' ? 'active' : ''}" data-val="prova"
+             onclick="segPick(this);_impNM.tipo='prova';renderFormImportacaoNM()">Prova da unidade</div>
+        <div class="seg ${_impNM.tipo === 'atividade' ? 'active' : ''}" data-val="atividade"
+             onclick="segPick(this);_impNM.tipo='atividade';renderFormImportacaoNM()">Atividade</div>
+      </div>
+    </div>
+
+    ${ _impNM.tipo === 'atividade' && unidadeSel ? renderSeletorAtividadeNM(unidadeSel) : '' }
+
+    <button class="btn btn-cyan" id="btn-imp-nm-continuar" onclick="continuarImportacaoNM()" ${ podeContinuar ? '' : 'disabled' }>
+      Continuar →
+    </button>
+    <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+/* Monta o seletor "em qual atividade essa nota vai entrar", usando o
+   qtdAtividades REAL da unidade (já veio do Nota Mestra na Etapa 1) —
+   diferente da exportação antiga, que pedia pro professor digitar isso. */
+function renderSeletorAtividadeNM(unidadeSel) {
+  const qtd = Math.max(1, unidadeSel.qtdAtividades || 1);
+  const atualNum = parseInt((_impNM.atividadeAlvo || '').replace('atv', ''), 10);
+  if (!_impNM.atividadeAlvo || isNaN(atualNum) || atualNum > qtd) {
+    _impNM.atividadeAlvo = 'atv1';
+  }
+  return `
+    <div class="input-group">
+      <label class="input-label">Em qual atividade essa nota vai entrar?</label>
+      <select class="input" id="imp-nm-atv-alvo" onchange="_impNM.atividadeAlvo=this.value">
+        ${Array.from({ length: qtd }, (_, i) => 'atv' + (i + 1)).map(k => `
+          <option value="${k}" ${k === _impNM.atividadeAlvo ? 'selected' : ''}>${k.replace('atv', 'Atividade ')}</option>
+        `).join('')}
+      </select>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+        Essa unidade tem ${qtd} atividade(s) configurada(s) no Nota Mestra.
+      </div>
+    </div>`;
+}
+
+/* Placeholder — a Etapa 3 (tela de confirmação com aluno → nota) entra aqui. */
+function continuarImportacaoNM() {
+  const pacote = JSON.parse(JSON.stringify(_impNM));
+  console.log('[Importação NM] pacote pronto pra confirmação:', pacote);
+  toast('Formulário OK — a confirmação entra na próxima etapa', 'success');
 }
 </script>
 
@@ -6557,7 +6743,10 @@ async function abrirResultadosProva(provaId) {
       <div class="skel skel-card"></div>
     </div>
     <div style="padding:0 16px 32px">
-      <button class="btn btn-primary" style="width:100%" onclick="exportarResultadosPDF()">
+      <button class="btn btn-primary" style="width:100%" onclick="abrirImportacaoNM('${p.id}')">
+        📥 Importar para o Nota Mestra
+      </button>
+      <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="exportarResultadosPDF()">
         🖨️ Exportar PDF
       </button>
       <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:6px">
