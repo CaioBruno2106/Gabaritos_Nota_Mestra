@@ -4817,7 +4817,12 @@ async function continuarImportacaoNM() {
       }
     }
     const notaNum = (nota !== null && nota !== undefined) ? parseFloat(nota) : NaN;
-    const nota10 = (max && !isNaN(notaNum)) ? arredondarNotaMestra((notaNum / max) * 10) : null;
+    // Envia a nota exatamente como ela é na prova (soma dos pesos das
+    // questões certas) — SEM reescalar pra base 10 e SEM arredondar pro
+    // múltiplo de 0,5 mais próximo (isso faria 0,3 virar 0,5, por exemplo).
+    // Se a prova foi configurada pra valer outro total (ex.: pesos somando
+    // 2), a nota enviada respeita esse total, igual aparece no Leitor.
+    const notaFinal = !isNaN(notaNum) ? notaNum : null;
 
     const nNorm = _normNomeNM(a.nome);
     const matchIdx = alunosDestino.findIndex(ad => _normNomeNM(ad.nome) === nNorm);
@@ -4825,7 +4830,8 @@ async function continuarImportacaoNM() {
     return {
       alunoOrigemId: a.id,
       nomeOrigem: a.nome,
-      nota10,
+      notaFinal,
+      notaMaxProva: max,
       matchIdx,
       nomeDestino: matchIdx >= 0 ? alunosDestino[matchIdx].nome : null
     };
@@ -4843,8 +4849,13 @@ function renderConfirmacaoImportacaoNM() {
 
   const casados      = pares.filter(p => p.matchIdx >= 0);
   const naoCasados    = pares.filter(p => p.matchIdx < 0);
-  const enviaveis     = casados.filter(p => p.nota10 !== null);
-  const casadosSemNota = casados.filter(p => p.nota10 === null);
+  const enviaveis     = casados.filter(p => p.notaFinal !== null);
+  const casadosSemNota = casados.filter(p => p.notaFinal === null);
+
+  // A prova não vale 10? Avisa — a nota é enviada no valor real da prova,
+  // sem reescalar, então vale a pena o professor confirmar que é isso mesmo.
+  const maxProva = pares.find(p => p.notaMaxProva !== null)?.notaMaxProva ?? null;
+  const provaNaoVale10 = maxProva !== null && Math.abs(maxProva - 10) > 0.01;
 
   // Já foi enviada essa mesma combinação (turma+unidade+tipo+atividade) antes?
   // Não bloqueia — só avisa, pra não duplicar sem perceber.
@@ -4857,7 +4868,7 @@ function renderConfirmacaoImportacaoNM() {
     <tr>
       <td style="font-size:.75rem;padding:4px 6px">${escapeHtml(p.nomeOrigem)}</td>
       <td style="font-size:.75rem;padding:4px 6px;text-align:center;font-weight:700">
-        ${p.nota10 !== null ? p.nota10.toFixed(1).replace('.0','').replace('.', ',') : '—'}
+        ${p.notaFinal !== null ? p.notaFinal.toFixed(1).replace('.0','').replace('.', ',') : '—'}
       </td>
       <td style="font-size:.75rem;padding:4px 6px;text-align:center">
         ${ p.matchIdx >= 0
@@ -4875,6 +4886,13 @@ function renderConfirmacaoImportacaoNM() {
       ${ _impNM.tipo === 'prova' ? 'Prova da unidade' : `Atividade (${_impNM.atividadeAlvo.replace('atv','')}ª)` }
       ${ _impNM.disciplina ? ' · ' + escapeHtml(_impNM.disciplina) : '' }
     </div>
+
+    ${ provaNaoVale10 ? `
+      <div class="nm-msg" style="margin-bottom:8px;background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.3);color:var(--yellow)">
+        ℹ️ Essa prova vale ${maxProva} (soma dos pesos das questões), não 10. As notas abaixo são
+        enviadas exatamente nesse valor — sem reescalar pra 0–10. Se não era isso que você queria,
+        ajuste os pesos da prova no Leitor pra somarem 10 antes de importar.
+      </div>` : '' }
 
     ${ envioAnterior ? `
       <div class="nm-msg error" style="margin-bottom:8px">
@@ -4932,7 +4950,7 @@ async function confirmarEnvioNM() {
   const unidade       = (turmaDestino?.unidades || []).find(u => u.id === _impNM.unidadeId);
   if (!prova || !turmaDestino || !unidade) { toast('Erro ao confirmar importação', 'error'); return; }
 
-  const enviaveis = (_impNM.pares || []).filter(p => p.matchIdx >= 0 && p.nota10 !== null);
+  const enviaveis = (_impNM.pares || []).filter(p => p.matchIdx >= 0 && p.notaFinal !== null);
   if (!enviaveis.length) { toast('Nenhum aluno pronto pra enviar', 'error'); return; }
 
   setLoading('btn-imp-nm-confirmar', true);
@@ -4946,7 +4964,7 @@ async function confirmarEnvioNM() {
       disciplina:    _impNM.disciplina || null,
       tipo:          _impNM.tipo, // 'prova' | 'atividade'
       atividadeAlvo: _impNM.tipo === 'atividade' ? _impNM.atividadeAlvo : null,
-      alunos:        enviaveis.map(p => ({ nome: p.nomeDestino, nota: p.nota10 })),
+      alunos:        enviaveis.map(p => ({ nome: p.nomeDestino, nota: p.notaFinal })),
       status:        'pendente',
       enviadoPor:    nmLink.user.email || nmLink.user.uid || null,
       criadoEm:      firebase.firestore.FieldValue.serverTimestamp()
