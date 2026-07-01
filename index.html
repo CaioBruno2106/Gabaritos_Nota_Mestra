@@ -6475,6 +6475,50 @@ async function confirmarSalvar() {
   }
 }
 
+/* Calcula acertos, nota, detalhe por questão e notas por disciplina,
+   usando o gabarito/pesos/anuladas ATUAIS da prova, a partir de um
+   objeto de respostas já definido (um valor final por questão).
+   Compartilhada entre o salvamento normal da correção e o recálculo
+   com pesos atualizados (ver RECÁLCULO DE NOTAS COM PESOS ATUAIS). */
+function calcularResultadoPonderado(prova, respostas) {
+  const nQ = prova.numQuestoes;
+  const detalhe = {};
+  let acertos = 0, max = 0;
+  for (let q = 1; q <= nQ; q++) {
+    const anulada  = prova.anuladas?.[q];
+    const gabarito = prova.gabarito?.[q];
+    const peso     = parseFloat(prova.pesos?.[q] || 1);
+    const resp     = respostas[q];
+    if (anulada) { detalhe[q] = { resp, status: 'anulada', pontos: 0 }; continue; }
+    max += peso;
+    const ok = resp && resp !== 'ANULADA' && resp === gabarito;
+    if (ok) acertos += peso;
+    detalhe[q] = { resp, status: ok ? 'correta' : !resp ? 'branco' : 'errada', pontos: ok ? peso : 0 };
+  }
+
+  let notasPorDisciplina = {};
+  if (prova.multidisciplinar && Array.isArray(prova.disciplinasConfig)) {
+    for (const dc of prova.disciplinasConfig) {
+      let dAcertos = 0, dMax = 0;
+      for (let q = (dc.questaoInicio||1); q <= (dc.questaoFim||nQ); q++) {
+        if (q < 1 || q > nQ) continue;
+        if (prova.anuladas?.[q]) continue;
+        const peso = parseFloat(prova.pesos?.[q] || 1);
+        dMax += peso;
+        if (detalhe[q]?.status === 'correta') dAcertos += peso;
+      }
+      notasPorDisciplina[dc.nome] = { nota: parseFloat(dAcertos.toFixed(2)), max: parseFloat(dMax.toFixed(2)), professorUid: dc.professorUid||'', professorNome: dc.professorNome||'' };
+    }
+  }
+
+  return {
+    detalhe,
+    nota:    parseFloat(acertos.toFixed(2)),
+    notaMax: parseFloat(max.toFixed(2)),
+    notasPorDisciplina
+  };
+}
+
 async function executarSalvar() {
   closeModal();
   const btn = document.querySelector('#e4-conf-footer .btn-cyan');
@@ -6491,36 +6535,7 @@ async function executarSalvar() {
       respostas[q] = r;
     }
 
-    // Calcula acertos, nota e detalhes por questão
-    const detalhe = {};
-    let acertos = 0, max = 0;
-    for (let q = 1; q <= nQ; q++) {
-      const anulada  = prova.anuladas?.[q];
-      const gabarito = prova.gabarito?.[q];
-      const peso     = parseFloat(prova.pesos?.[q] || 1);
-      const resp     = respostas[q];
-      if (anulada) { detalhe[q] = { resp, status: 'anulada', pontos: 0 }; continue; }
-      max += peso;
-      const ok = resp && resp !== 'ANULADA' && resp === gabarito;
-      if (ok) acertos += peso;
-      detalhe[q] = { resp, status: ok ? 'correta' : !resp ? 'branco' : 'errada', pontos: ok ? peso : 0 };
-    }
-
-    // Calcula nota por disciplina (para provas multidisciplinares)
-    let notasPorDisciplina = {};
-    if (prova.multidisciplinar && Array.isArray(prova.disciplinasConfig)) {
-      for (const dc of prova.disciplinasConfig) {
-        let dAcertos = 0, dMax = 0;
-        for (let q = (dc.questaoInicio||1); q <= (dc.questaoFim||nQ); q++) {
-          if (q < 1 || q > nQ) continue;
-          if (prova.anuladas?.[q]) continue;
-          const peso = parseFloat(prova.pesos?.[q] || 1);
-          dMax += peso;
-          if (detalhe[q]?.status === 'correta') dAcertos += peso;
-        }
-        notasPorDisciplina[dc.nome] = { nota: parseFloat(dAcertos.toFixed(2)), max: parseFloat(dMax.toFixed(2)), professorUid: dc.professorUid||'', professorNome: dc.professorNome||'' };
-      }
-    }
+    const { detalhe, nota, notaMax, notasPorDisciplina } = calcularResultadoPonderado(prova, respostas);
 
     // UIDs de professores responsáveis por alguma disciplina desta prova nesta turma
     const professoresResponsaveis = prova.multidisciplinar
@@ -6537,8 +6552,8 @@ async function executarSalvar() {
       alunoNome:  corr.aluno.nome,
       respostas,
       detalhe,
-      nota:       parseFloat(acertos.toFixed(2)),
-      notaMax:    parseFloat(max.toFixed(2)),
+      nota,
+      notaMax,
       duplas:     corr.duplas,
       corrigidoEm: firebase.firestore.FieldValue.serverTimestamp(),
       corrigidoPor: auth.currentUser?.uid || '',
@@ -6560,11 +6575,86 @@ async function executarSalvar() {
     }
 
     document.getElementById('e4-conf-overlay')?.remove();
-    toast(`✓ Nota: ${acertos.toFixed(1)} / ${max.toFixed(1)} — salvo!`, 'success');
+    toast(`✓ Nota: ${nota.toFixed(1)} / ${notaMax.toFixed(1)} — salvo!`, 'success');
 
   } catch (e) {
     toast('Erro ao salvar: ' + e.message, 'error');
     if (btn) { btn.disabled = false; btn.innerHTML = '✓ Confirmar e salvar'; }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RECÁLCULO DE NOTAS COM PESOS ATUAIS
+   O peso de cada questão fica "congelado" no momento da correção.
+   Se você ajustar os pesos de uma prova DEPOIS de já ter corrigido
+   alguém, essas correções antigas ficam desatualizadas. Isso aqui
+   reaplica o gabarito/pesos/anuladas ATUAIS em cima das respostas
+   já registradas de cada aluno — sem precisar escanear de novo.
+═══════════════════════════════════════════════════════════════ */
+
+async function abrirRecalculoPesos(provaId) {
+  const prova = (cache.provas || []).find(p => p.id === provaId);
+  if (!prova) { toast('Prova não encontrada', 'error'); return; }
+
+  await loadResultados();
+  const resultadosProva = (cacheRes.items || []).filter(r => r.provaId === provaId);
+  if (!resultadosProva.length) { toast('Essa prova ainda não tem nenhuma correção lançada', 'error'); return; }
+
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Recalcular notas com os pesos atuais</div>
+    <div class="nm-msg info" style="margin-bottom:10px">
+      Isso vai reaplicar o gabarito, os pesos e as anulações <strong>atuais</strong> da prova
+      em cima das respostas já registradas de cada aluno — sem precisar escanear de novo.
+      Use isso se você ajustou os pesos depois de já ter corrigido alguém.
+    </div>
+    <div class="nm-msg" style="margin-bottom:10px">
+      ${resultadosProva.length} aluno(s) corrigido(s) nesta prova serão conferidos.
+      Só quem realmente mudar de nota é regravado.
+    </div>
+    <button class="btn btn-cyan" id="btn-recalc-confirmar" onclick="executarRecalculoPesos('${provaId}')">
+      🔄 Recalcular agora
+    </button>
+    <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Cancelar</button>
+  `);
+}
+
+async function executarRecalculoPesos(provaId) {
+  const prova = (cache.provas || []).find(p => p.id === provaId);
+  if (!prova) { toast('Prova não encontrada', 'error'); return; }
+
+  const resultadosProva = (cacheRes.items || []).filter(r => r.provaId === provaId);
+  if (!resultadosProva.length) { toast('Nada para recalcular', 'error'); return; }
+
+  setLoading('btn-recalc-confirmar', true);
+  try {
+    const batch = db.batch();
+    let alterados = 0;
+
+    resultadosProva.forEach(r => {
+      const { detalhe, nota, notaMax, notasPorDisciplina } = calcularResultadoPonderado(prova, r.respostas || {});
+      // Só regrava se algo de fato mudou, pra não gerar escritas à toa
+      if (r.nota === nota && r.notaMax === notaMax) return;
+      batch.update(ref.resultados().doc(r.id), { detalhe, nota, notaMax, notasPorDisciplina });
+      alterados++;
+    });
+
+    if (alterados === 0) {
+      toast('Todos os resultados já estavam com os pesos atuais — nada mudou.', '');
+      closeModal();
+      return;
+    }
+
+    await batch.commit();
+    cacheRes.items = null; // força recarregar os resultados na próxima leitura
+    toast(`${alterados} de ${resultadosProva.length} nota(s) recalculada(s) com os pesos atuais!`, 'success');
+    closeModal();
+    // Se a tela de resultados dessa prova estiver aberta, atualiza na hora
+    if (typeof abrirResultadosProva === 'function') abrirResultadosProva(provaId);
+  } catch (e) {
+    toast('Erro ao recalcular: ' + e.message, 'error');
+  } finally {
+    setLoading('btn-recalc-confirmar', false);
   }
 }
 
@@ -6991,6 +7081,9 @@ async function abrirResultadosProva(provaId) {
     <div style="padding:0 16px 32px">
       <button class="btn btn-primary" style="width:100%" onclick="abrirImportacaoNM('${p.id}')">
         📥 Importar para o Nota Mestra
+      </button>
+      <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="abrirRecalculoPesos('${p.id}')">
+        🔄 Recalcular com pesos atuais
       </button>
       <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="exportarResultadosPDF()">
         🖨️ Exportar PDF
