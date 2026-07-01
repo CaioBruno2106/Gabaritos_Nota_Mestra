@@ -3700,6 +3700,14 @@ function mais() {
 
   <div class="mais-section">
     <div class="mais-section-title">Integração</div>
+    <div class="mais-item" onclick="abrirConexaoNM()">
+      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">🔗</div>
+      <div class="mais-item-text">
+        <div class="mais-item-title">Conectar ao Nota Mestra</div>
+        <div class="mais-item-sub">${ nmLink.user ? `Conectado como ${escapeHtml(nmLink.user.email||nmLink.user.displayName||'')} · ${nmLink.turmas.length} turma(s)` : 'Necessário para importar notas direto pra lá' }</div>
+      </div>
+      <div class="mais-item-arrow">›</div>
+    </div>
     <div class="mais-item" onclick="abrirExportacaoNM()">
       <div class="mais-item-icon" style="background:rgba(245,166,35,0.15);">📤</div>
       <div class="mais-item-text">
@@ -4352,6 +4360,194 @@ function buildBubbleGrid() {
     const cell = document.createElement('div');
     cell.className = 'bubble-cell' + (Math.random() < 0.28 ? ' filled' : '');
     grid.appendChild(cell);
+  }
+}
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   INTEGRAÇÃO NOTA MESTRA — ETAPA 1
+   Login cruzado (mesmo e-mail/senha, ou Google) no projeto Firebase
+   do Nota Mestra + leitura das turmas e unidades letivas do professor.
+   Não grava nada ainda — só conecta e mantém em cache local (nmLink).
+   As próximas etapas (formulário de importação, confirmação, envio)
+   vão consumir nmLink.turmas.
+═══════════════════════════════════════════════════════════════ */
+
+/* Credenciais do projeto do Nota Mestra (mesmas usadas lá) */
+const NM_FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyCjnf-MuwqmyXjxdRvw4bjvco3V8aKCAAo",
+  authDomain:        "nota-mestra.firebaseapp.com",
+  projectId:         "nota-mestra",
+  storageBucket:     "nota-mestra.firebasestorage.app",
+  messagingSenderId: "858983963077",
+  appId:             "1:858983963077:web:c0d57b82023b5f1ff693ac"
+};
+
+/* App Firebase secundário — não interfere no app principal do Leitor */
+const nmApp  = firebase.initializeApp(NM_FIREBASE_CONFIG, 'notaMestra');
+const nmAuth = nmApp.auth();
+const nmDb   = nmApp.firestore();
+
+/* Estado da conexão com o Nota Mestra */
+const nmLink = {
+  user:       null,   // usuário autenticado no projeto do Nota Mestra
+  turmas:     [],      // [{id,nome,serie,turma,nivel,turno,disciplina,anoLetivo,sistema,alunos,unidades:[{id,label,ordem,sistema}]}]
+  carregando: false,
+  carregadoEm: null
+};
+
+/* Mantém sessão entre recarregamentos da página (persistência própria do app secundário) */
+nmAuth.onAuthStateChanged(user => {
+  nmLink.user = user || null;
+  if (!user) { nmLink.turmas = []; nmLink.carregadoEm = null; }
+  if (app.currentNav === 'mais') navTo('mais'); // atualiza o texto do item no menu
+});
+
+/* ── Modal de conexão (chamado a partir do menu Mais) ───────────── */
+function abrirConexaoNM() {
+  const conectado = !!nmLink.user;
+  showModal(`
+    <div class="modal-handle"></div>
+    <div class="modal-title">Conectar ao Nota Mestra</div>
+    <div style="font-size:13px;color:var(--text-muted);line-height:1.5;margin-bottom:10px">
+      Entre com o mesmo login que você usa no Nota Mestra. Isso permite escolher a turma
+      e a unidade letiva certas na hora de importar notas de uma prova corrigida.
+    </div>
+    ${ conectado ? `
+      <div class="ob-msg success" style="margin-bottom:10px">
+        ✅ Conectado como <strong>${escapeHtml(nmLink.user.email || nmLink.user.displayName || '')}</strong><br>
+        ${nmLink.turmas.length} turma(s) carregada(s) do Nota Mestra.
+      </div>
+      <button class="btn btn-cyan" id="btn-nm-atualizar" onclick="carregarTurmasNM(true)">🔄 Atualizar turmas</button>
+      <button class="btn btn-ghost" id="btn-nm-desconectar" onclick="desconectarNM()" style="margin-top:8px">Desconectar</button>
+    ` : `
+      <div class="input-group">
+        <label class="input-label">E-mail</label>
+        <input class="input" id="nm-login-email" type="email" placeholder="seu@email.com" value="${escapeHtml(app.user?.email || '')}">
+      </div>
+      <div class="input-group">
+        <label class="input-label">Senha</label>
+        <input class="input" id="nm-login-senha" type="password" placeholder="Senha do Nota Mestra">
+      </div>
+      <button class="btn btn-cyan" id="btn-nm-entrar" onclick="loginNM()">Entrar</button>
+      <div style="text-align:center;margin:10px 0;font-size:12px;color:var(--text-dim)">ou</div>
+      <button class="btn btn-ghost" id="btn-nm-google" onclick="loginNMGoogle()">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px">
+        Entrar com Google
+      </button>
+      <div id="nm-login-msg" class="ob-msg" style="margin-top:8px"></div>
+    `}
+    <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Fechar</button>
+  `);
+}
+
+async function loginNM() {
+  const email = document.getElementById('nm-login-email').value.trim();
+  const senha = document.getElementById('nm-login-senha').value;
+  const msgEl = document.getElementById('nm-login-msg');
+  if (!email || !senha) {
+    if (msgEl) { msgEl.textContent = 'Informe e-mail e senha.'; msgEl.className = 'ob-msg error'; }
+    return;
+  }
+  setLoading('btn-nm-entrar', true);
+  try {
+    const cred = await nmAuth.signInWithEmailAndPassword(email, senha);
+    nmLink.user = cred.user; // não espera o onAuthStateChanged pra evitar corrida com carregarTurmasNM
+    toast('Conectado ao Nota Mestra!', 'success');
+    await carregarTurmasNM(true);
+    abrirConexaoNM();
+  } catch (e) {
+    if (msgEl) { msgEl.textContent = _traduzErroAuthNM(e); msgEl.className = 'ob-msg error'; }
+  } finally {
+    setLoading('btn-nm-entrar', false);
+  }
+}
+
+async function loginNMGoogle() {
+  const msgEl = document.getElementById('nm-login-msg');
+  setLoading('btn-nm-google', true);
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    const cred = await nmAuth.signInWithPopup(provider);
+    nmLink.user = cred.user; // não espera o onAuthStateChanged pra evitar corrida com carregarTurmasNM
+    toast('Conectado ao Nota Mestra!', 'success');
+    await carregarTurmasNM(true);
+    abrirConexaoNM();
+  } catch (e) {
+    if (msgEl) { msgEl.textContent = _traduzErroAuthNM(e); msgEl.className = 'ob-msg error'; }
+  } finally {
+    setLoading('btn-nm-google', false);
+  }
+}
+
+function _traduzErroAuthNM(e) {
+  const map = {
+    'auth/wrong-password':       'Senha incorreta.',
+    'auth/user-not-found':       'Não existe uma conta do Nota Mestra com esse e-mail.',
+    'auth/invalid-credential':   'E-mail ou senha incorretos.',
+    'auth/invalid-email':        'E-mail inválido.',
+    'auth/too-many-requests':    'Muitas tentativas. Tente de novo em alguns minutos.',
+    'auth/popup-closed-by-user': 'Login cancelado.',
+    'auth/network-request-failed': 'Falha de conexão. Verifique sua internet.'
+  };
+  return map[e.code] || ('Erro ao conectar: ' + e.message);
+}
+
+async function desconectarNM() {
+  try { await nmAuth.signOut(); } catch (e) {}
+  nmLink.turmas = [];
+  nmLink.carregadoEm = null;
+  toast('Desconectado do Nota Mestra', '');
+  abrirConexaoNM();
+}
+
+/* ── Carrega turmas + unidades letivas do professor no Nota Mestra ── */
+async function carregarTurmasNM(forcar) {
+  if (!nmLink.user) return;
+  if (nmLink.carregando) return;
+  // cache simples de 5 min pra não reconsultar toda hora
+  if (!forcar && nmLink.carregadoEm && (Date.now() - nmLink.carregadoEm) < 5 * 60 * 1000) return;
+
+  nmLink.carregando = true;
+  setLoading('btn-nm-atualizar', true);
+  try {
+    const uid = nmLink.user.uid;
+    const tSnap = await nmDb.collection('users').doc(uid).collection('turmas').get();
+    const turmas = [];
+
+    for (const tDoc of tSnap.docs) {
+      const t = { id: tDoc.id, ...tDoc.data() };
+      if (t.ativo === false) continue; // ignora turmas inativas
+
+      let unidades = [];
+      try {
+        const uSnap = await nmDb.collection('users').doc(uid)
+          .collection('turmas').doc(t.id).collection('unidades').get();
+        unidades = uSnap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+      } catch (e) {
+        console.warn('Erro ao carregar unidades de', t.nome, e);
+      }
+
+      turmas.push({
+        id: t.id, nome: t.nome, serie: t.serie, turma: t.turma, nivel: t.nivel,
+        turno: t.turno, disciplina: t.disciplina, anoLetivo: t.anoLetivo,
+        sistema: t.sistema,
+        alunos: (t.alunos || []).map(a => typeof a === 'string' ? { nome: a } : a),
+        unidades
+      });
+    }
+
+    nmLink.turmas = turmas;
+    nmLink.carregadoEm = Date.now();
+    toast(`${turmas.length} turma(s) do Nota Mestra carregada(s)`, 'success');
+  } catch (e) {
+    toast('Erro ao carregar turmas do Nota Mestra: ' + e.message, 'error');
+  } finally {
+    nmLink.carregando = false;
+    setLoading('btn-nm-atualizar', false);
   }
 }
 </script>
