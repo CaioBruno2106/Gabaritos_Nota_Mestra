@@ -2727,7 +2727,117 @@ html, body {
 .icon-btn:active { background: var(--surface2); }
 .icon-btn.danger:active { color: var(--red); }
 
+/* ═══════════════════════════════════════════════
+   LAYOUT DESKTOP — telas ≥860px
+   O app inteiro é construído "mobile-first" (bottom
+   nav, modais em bottom-sheet, listas em coluna
+   única). Este bloco reorganiza esses mesmos
+   elementos para telas grandes, para que o app pareça
+   pensado para PC também — e não apenas esticado.
+═══════════════════════════════════════════════ */
+@media (min-width: 860px) {
+
+  /* ── Login: cartão centralizado sobre o hero cheio ── */
+  .login-card {
+    max-width: 440px;
+    width: 100%;
+    margin: 0 auto;
+    border-radius: 24px;
+    border: 1px solid var(--border2);
+    box-shadow: var(--shadow-lg);
+  }
+  .login-hero { padding-top: 64px; }
+
+  /* ── Onboarding: passos centralizados ── */
+  .onboarding-header,
+  .onboarding-body,
+  .onboarding-footer {
+    max-width: 540px;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* ── Estrutura do app: barra de abas sobe para o topo ── */
+  .topbar { padding: 0 32px; order: 0; }
+
+  .bottom-nav {
+    position: static;
+    order: 1;
+    height: auto;
+    padding: 0 28px;
+    justify-content: flex-start;
+    gap: 4px;
+    box-shadow: none;
+    border-top: none;
+    border-bottom: 1px solid var(--border2);
+  }
+  .nav-item {
+    flex: 0 0 auto;
+    flex-direction: row;
+    height: 50px;
+    padding: 0 16px;
+    gap: 8px;
+  }
+  .nav-item svg { width: 18px; height: 18px; }
+  .nav-item span { font-size: 13px; }
+  .nav-item:hover { background: var(--surface2); }
+  .nav-item.active::after {
+    top: auto; bottom: 0; left: 16px; right: 16px;
+    width: auto; transform: none;
+    border-radius: 3px 3px 0 0;
+  }
+
+  .app-content {
+    order: 2;
+    max-width: 1180px;
+    margin: 0 auto;
+    width: 100%;
+    padding-top: 24px;
+    padding-bottom: 40px;
+  }
+
+  /* ── Cartões e listas em grade, como no Nota Mestra ── */
+  .dash-stats {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+  }
+  .dash-quick-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .list-wrap {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    align-items: start;
+    gap: 12px;
+  }
+  .info-grid { grid-template-columns: repeat(4, 1fr); }
+  .rel-resumo-grid { grid-template-columns: repeat(4, 1fr); }
+
+  /* ── Modais centralizados, não em bottom-sheet ── */
+  .modal-overlay {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .modal {
+    width: 100%;
+    max-width: 540px;
+    max-height: 85vh;
+    border-radius: 20px;
+    animation: modal-pop .22s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .modal-handle { display: none; }
+  @keyframes modal-pop {
+    from { opacity: 0; transform: scale(.96) translateY(8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+}
+
 </style>
+
 </head>
 <body>
 
