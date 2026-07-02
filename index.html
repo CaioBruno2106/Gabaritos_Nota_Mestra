@@ -4,12 +4,40 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
-<title>Nota Mestra</title>
+<title>Nota Mestra - Leitor de Gabaritos</title>
 <!-- build: v7 (Etapa 7 — Exportação JSON para Nota Mestra, formato de backup por turma, prova ou atividade) -->
 <!-- build anterior: v7a (Etapa A — Arquivar provas · Excluir correções · Nota por disciplina na conferência) -->
 
 <!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+
+<!-- ═══ Ícones (Lucide) — pack padronizado Nota Mestra ═══
+     Traço 2px, extremidades e junções arredondadas, estilo consistente
+     com o guia de ícones oficial (scanner, gabarito, correção, etc). ═══ -->
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script>
+/* Helper: gera a tag do ícone padrão. Uso: ${ic('check')} ou ${ic('medal','gold')} */
+function ic(name, cls) {
+  return '<i data-lucide="' + name + '"' + (cls ? ' class="ic-' + cls + '"' : '') + '></i>';
+}
+/* Redesenha os ícones sempre que o DOM muda (a app re-renderiza views inteiras via innerHTML) */
+(function () {
+  let pending = false;
+  function runCreateIcons() {
+    pending = false;
+    try { if (window.lucide) lucide.createIcons(); } catch (e) {}
+  }
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(runCreateIcons);
+  }
+  document.addEventListener('DOMContentLoaded', schedule);
+  window.addEventListener('load', schedule);
+  new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
+  window._iconRefresh = schedule;
+})();
+</script>
 <script>
 /* ════════════════════════════════════════════════════════════════
    ETAPA 2 — CRUD Turmas, Alunos, Provas
@@ -123,7 +151,7 @@ async function renderTurmas() {
   if (!arr.length) {
     list.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">👥</div>
+        <div class="empty-icon">${ic('users')}</div>
         <div class="empty-title">Nenhuma turma cadastrada</div>
         <div class="empty-sub">Crie a primeira turma para começar a vincular alunos e provas.</div>
         <button class="btn btn-cyan" onclick="openTurmaForm()">+ Nova turma</button>
@@ -232,7 +260,7 @@ function excluirTurma(id) {
     <div class="modal-title">Excluir turma?</div>
     <div style="font-size:14px;color:var(--text-muted);line-height:1.5;">
       <strong style="color:var(--text)">${escapeHtml(turma?.nome||'')}</strong> será removida.
-      ${nAlunos>0 ? `<br><br>⚠️ Esta turma tem <strong>${nAlunos} aluno(s)</strong>. Eles continuarão cadastrados, mas ficarão sem turma.` : ''}
+      ${nAlunos>0 ? `<br><br>${ic('alert-triangle')} Esta turma tem <strong>${nAlunos} aluno(s)</strong>. Eles continuarão cadastrados, mas ficarão sem turma.` : ''}
     </div>
     <button class="btn btn-danger" onclick="confirmaExcluirTurma('${id}')">Sim, excluir</button>
     <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
@@ -263,7 +291,7 @@ async function abrirTurma(id) {
     <div class="detail-header">
       <div class="back-btn" onclick="navTo('turmas')">‹</div>
       <div class="detail-title">${escapeHtml(t.nome)}</div>
-      <button class="icon-btn" onclick='openTurmaForm(${JSON.stringify(t).replace(/"/g,"&quot;")})' title="Editar">✏️</button>
+      <button class="icon-btn" onclick='openTurmaForm(${JSON.stringify(t).replace(/"/g,"&quot;")})' title="Editar">${ic('pencil')}</button>
     </div>
     <div class="info-grid">
       <div class="info-pill"><div class="info-pill-label">Turno</div><div class="info-pill-value">${escapeHtml(t.turno||'—')}</div></div>
@@ -277,13 +305,13 @@ async function abrirTurma(id) {
     </div>
     <div class="list-wrap" id="turma-alunos-list">
       ${ alunos.length === 0
-          ? `<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-title">Nenhum aluno</div><div class="empty-sub">Adicione alunos individualmente ou por lista colada.</div>
+          ? `<div class="empty-state"><div class="empty-icon">${ic('user')}</div><div class="empty-title">Nenhum aluno</div><div class="empty-sub">Adicione alunos individualmente ou por lista colada.</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
                 <button class="btn btn-cyan" onclick="openAlunoForm(null,'${id}')">+ Aluno</button>
-                <button class="btn btn-ghost" onclick="openImportAlunos('${id}')">📋 Colar lista</button>
+                <button class="btn btn-ghost" onclick="openImportAlunos('${id}')">${ic('clipboard-list')} Colar lista</button>
               </div></div>`
           : alunos.map(a => alunoRowHtml(a)).join('') + `
-              <button class="btn btn-ghost" style="margin-top:8px" onclick="openImportAlunos('${id}')">📋 Importar lista</button>
+              <button class="btn btn-ghost" style="margin-top:8px" onclick="openImportAlunos('${id}')">${ic('clipboard-list')} Importar lista</button>
             `
       }
     </div>
@@ -297,8 +325,8 @@ function alunoRowHtml(a) {
       <div class="aluno-name">${escapeHtml(a.nome)}</div>
       ${a.matricula ? `<span class="aluno-mat">${escapeHtml(a.matricula)}</span>` : ''}
       <div class="aluno-actions">
-        <button class="icon-btn" onclick='event.stopPropagation();openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'>✏️</button>
-        <button class="icon-btn danger" onclick="event.stopPropagation();excluirAluno('${a.id}')">🗑️</button>
+        <button class="icon-btn" onclick='event.stopPropagation();openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'>${ic('pencil')}</button>
+        <button class="icon-btn danger" onclick="event.stopPropagation();excluirAluno('${a.id}')">${ic('trash-2')}</button>
       </div>
     </div>`;
 }
@@ -320,7 +348,7 @@ function alunos() {
     </div>
     <div class="search-bar">
       <input class="search-input" id="alunos-search" placeholder="Buscar aluno..." oninput="renderAlunos()">
-      <button class="btn-icon" style="background:var(--surface2);color:var(--text);box-shadow:none;border:1px solid var(--border)" onclick="openImportAlunos()">📋</button>
+      <button class="btn-icon" style="background:var(--surface2);color:var(--text);box-shadow:none;border:1px solid var(--border)" onclick="openImportAlunos()">${ic('clipboard-list')}</button>
     </div>
     <div class="filter-chips" id="alunos-chips"></div>
     <div id="alunos-list" class="list-wrap">
@@ -353,7 +381,7 @@ async function renderAlunos() {
   if (!arr.length) {
     listEl.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">👤</div>
+        <div class="empty-icon">${ic('user')}</div>
         <div class="empty-title">Nenhum aluno</div>
         <div class="empty-sub">Cadastre alunos individualmente, importe uma lista colada, ou ajuste o filtro.</div>
         <button class="btn btn-cyan" onclick="openAlunoForm()">+ Novo aluno</button>
@@ -369,8 +397,8 @@ async function renderAlunos() {
       </div>
       ${a.matricula ? `<span class="aluno-mat">${escapeHtml(a.matricula)}</span>` : ''}
       <div class="aluno-actions">
-        <button class="icon-btn" onclick='event.stopPropagation();openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'>✏️</button>
-        <button class="icon-btn danger" onclick="event.stopPropagation();excluirAluno('${a.id}')">🗑️</button>
+        <button class="icon-btn" onclick='event.stopPropagation();openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'>${ic('pencil')}</button>
+        <button class="icon-btn danger" onclick="event.stopPropagation();excluirAluno('${a.id}')">${ic('trash-2')}</button>
       </div>
     </div>`).join('');
 }
@@ -556,7 +584,7 @@ function provas() {
              style="flex:1" oninput="renderProvas()">
       <button class="btn-icon" id="btn-filtros-provas" style="background:var(--surface2);color:var(--text);box-shadow:none;border:1px solid var(--border);position:relative"
               onclick="toggleFiltrosProvas()">
-        ⚙️
+        ${ic('settings')}
         <span id="filtros-badge" style="display:none;position:absolute;top:-4px;right:-4px;width:10px;height:10px;background:var(--cyan);border-radius:50%"></span>
       </button>
     </div>
@@ -605,9 +633,9 @@ function provas() {
       </div>
       <div style="display:flex;gap:8px">
         <div class="chip ${_showArquivadas?'active':''}" onclick="toggleArquivadas()" style="cursor:pointer;font-size:12px">
-          📦 ${_showArquivadas ? 'Ocultar arquivadas' : 'Ver arquivadas'}
+          ${ic('archive')} ${_showArquivadas ? 'Ocultar arquivadas' : 'Ver arquivadas'}
         </div>
-        <div class="chip" onclick="limparFiltrosProvas()" style="cursor:pointer;font-size:12px;color:var(--text-muted)">✕ Limpar filtros</div>
+        <div class="chip" onclick="limparFiltrosProvas()" style="cursor:pointer;font-size:12px;color:var(--text-muted)">${ic('x')} Limpar filtros</div>
       </div>
     </div>
 
@@ -693,7 +721,7 @@ async function renderProvas() {
   if (!arr.length) {
     list.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">📋</div>
+        <div class="empty-icon">${ic('clipboard-list')}</div>
         <div class="empty-title">Nenhuma prova encontrada</div>
         <div class="empty-sub">Ajuste os filtros ou crie uma nova prova.</div>
         <button class="btn btn-cyan" onclick="iniciarWizardProva()">+ Nova prova</button>
@@ -705,17 +733,17 @@ async function renderProvas() {
     const isEscola = p.escopo === 'escola';
     const isArquivada = !!p.arquivada;
     const badgeEscopo = isEscola
-      ? `<span class="badge badge-cyan" style="font-size:10px">🏫 Escola</span>`
-      : `<span class="badge badge-blue" style="font-size:10px">🔒 Particular</span>`;
+      ? `<span class="badge badge-cyan" style="font-size:10px">${ic('school')} Escola</span>`
+      : `<span class="badge badge-blue" style="font-size:10px">${ic('lock')} Particular</span>`;
     const badgeArq = isArquivada
-      ? `<span class="badge" style="font-size:10px;background:rgba(122,154,191,0.15);color:var(--text-muted)">📦 Arquivada</span>`
+      ? `<span class="badge" style="font-size:10px;background:rgba(122,154,191,0.15);color:var(--text-muted)">${ic('archive')} Arquivada</span>`
       : '';
     const bimLabel = p.bimestre ? `${p.bimestre}ª unid.` : '';
     const anoLabel = p.anoLetivo || '';
     const meta = [escapeHtml(p.disciplina||''), escapeHtml(turmaNome), bimLabel, anoLabel, `${p.numQuestoes||'?'} questões`].filter(Boolean).join(' · ');
     return `
       <div class="list-card" onclick="abrirProva('${p.id}')" style="${isArquivada?'opacity:0.65':''}">
-        <div class="list-card-icon ${isEscola ? 'cyan' : 'yellow'}">📋</div>
+        <div class="list-card-icon ${isEscola ? 'cyan' : 'yellow'}">${ic('clipboard-list')}</div>
         <div class="list-card-body">
           <div class="list-card-title" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             ${escapeHtml(p.nome)} ${badgeEscopo} ${badgeArq}
@@ -805,8 +833,8 @@ function wizardStep1() {
       <div class="input-group">
         <label class="input-label">Tipo de avaliação</label>
         <div class="segmented" id="w-tipo-seg">
-          <div class="seg ${!multidisc?'active':''}" onclick="wizard.data.multidisciplinar=false;wizard.data.disciplinasConfig=[];renderWizard()">📖 Uma disciplina</div>
-          <div class="seg ${multidisc?'active':''}" onclick="wizard.data.multidisciplinar=true;renderWizard()">📚 Multidisciplinar</div>
+          <div class="seg ${!multidisc?'active':''}" onclick="wizard.data.multidisciplinar=false;wizard.data.disciplinasConfig=[];renderWizard()">${ic('book-open')} Uma disciplina</div>
+          <div class="seg ${multidisc?'active':''}" onclick="wizard.data.multidisciplinar=true;renderWizard()">${ic('book-copy')} Multidisciplinar</div>
         </div>
       </div>` : '' }
 
@@ -834,7 +862,7 @@ function wizardStep1() {
         </div>
         <button class="btn btn-ghost" style="margin-top:8px" onclick="adicionarDisciplinaConfig()">+ Adicionar disciplina</button>
         <div id="w-disc-aviso" style="font-size:12px;color:var(--yellow);margin-top:6px;display:${d.disciplinasConfig.length<2?'block':'none'}">
-          ⚠️ Adicione pelo menos 2 disciplinas para uma avaliação multidisciplinar.
+          ${ic('alert-triangle')} Adicione pelo menos 2 disciplinas para uma avaliação multidisciplinar.
         </div>
       </div>
       ` }
@@ -848,9 +876,9 @@ function wizardStep1() {
           ${renderTurmasSelecionadas(d.turmaIds)}
         </div>
         <button class="btn btn-ghost" id="w-turmas-btn" style="font-size:12px;width:100%" onclick="abrirSeletorTurmasWizard()">
-          ${ d.turmaIds.length === 0 ? '+ Selecionar turmas' : '✏️ Editar turmas selecionadas' }
+          ${ d.turmaIds.length === 0 ? '+ Selecionar turmas' : `${ic('pencil')} Editar turmas selecionadas` }
         </button>
-        ${turmas.length===0 ? '<div style="font-size:12px;color:var(--yellow);margin-top:4px">⚠️ Crie uma turma primeiro</div>' : ''}
+        ${turmas.length===0 ? `<div style="font-size:12px;color:var(--yellow);margin-top:4px">${ic('alert-triangle')} Crie uma turma primeiro</div>` : ''}
       </div>
       <div class="input-group">
         <label class="input-label">Unidade letiva</label>
@@ -868,11 +896,11 @@ function wizardStep1() {
       <div class="input-group">
         <label class="input-label">Visibilidade da prova</label>
         <div class="segmented" id="w-escopo-seg">
-          <div class="seg ${d.escopo==='proprio'?'active':''}" data-val="proprio" onclick="segPick(this);wizard.data.escopo=this.dataset.val">🔒 Só eu</div>
-          <div class="seg ${d.escopo==='escola'?'active':''}" data-val="escola" onclick="segPick(this);wizard.data.escopo=this.dataset.val">🏫 Toda escola</div>
+          <div class="seg ${d.escopo==='proprio'?'active':''}" data-val="proprio" onclick="segPick(this);wizard.data.escopo=this.dataset.val">${ic('lock')} Só eu</div>
+          <div class="seg ${d.escopo==='escola'?'active':''}" data-val="escola" onclick="segPick(this);wizard.data.escopo=this.dataset.val">${ic('school')} Toda escola</div>
         </div>
         <div style="font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.5">
-          ${ d.escopo==='escola' ? '📢 Todos os professores poderão ver e usar esta prova.' : '🔒 Só você verá esta prova — gestores não têm acesso.' }
+          ${ d.escopo==='escola' ? `${ic('megaphone')} Todos os professores poderão ver e usar esta prova.` : `${ic('lock')} Só você verá esta prova — gestores não têm acesso.` }
         </div>
       </div>` : `
       <div class="input-group">
@@ -884,13 +912,13 @@ function wizardStep1() {
           ${ renderDestinatariosList(d.professoresDestinatarios) }
         </div>
         <button class="btn btn-ghost" style="font-size:12px" onclick="toggleTodosDestinatarios()">
-          ${ d.professoresDestinatarios.length === 0 ? '👥 Todos os professores (padrão)' : `✏️ ${d.professoresDestinatarios.length} professor(es) selecionado(s)` }
+          ${ d.professoresDestinatarios.length === 0 ? `${ic('users')} Todos os professores (padrão)` : `${ic('pencil')} ${d.professoresDestinatarios.length} professor(es) selecionado(s)` }
         </button>
       </div>` }
     </div>
     <div class="wizard-footer">
       <button class="btn btn-ghost" onclick="navTo('provas')">Cancelar</button>
-      <button class="btn btn-cyan" id="btn-w-next" onclick="wizardNext()" ${ w1Valid() ? '' : 'disabled' }>Próximo →</button>
+      <button class="btn btn-cyan" id="btn-w-next" onclick="wizardNext()" ${ w1Valid() ? '' : 'disabled' }>Próximo ${ic('arrow-right')}</button>
     </div>
   `;
 }
@@ -902,7 +930,7 @@ function renderTurmasSelecionadas(turmaIds) {
   }
   return `<div style="display:flex;flex-wrap:wrap;gap:4px">
     ${turmaIds.map(id => `<span class="badge badge-cyan" style="font-size:11px">${escapeHtml(turmaNomeById(id))}
-      <span style="cursor:pointer;margin-left:4px;opacity:.7" onclick="removerTurmaWizard('${id}')">✕</span>
+      <span style="cursor:pointer;margin-left:4px;opacity:.7" onclick="removerTurmaWizard('${id}')">${ic('x')}</span>
     </span>`).join('')}
   </div>`;
 }
@@ -911,7 +939,7 @@ function atualizarTurmasWizardUI() {
   const el = document.getElementById('w-turmas-list');
   if (el) el.innerHTML = renderTurmasSelecionadas(wizard.data.turmaIds);
   const btn = document.getElementById('w-turmas-btn');
-  if (btn) btn.textContent = wizard.data.turmaIds.length === 0 ? '+ Selecionar turmas' : '✏️ Editar turmas selecionadas';
+  if (btn) btn.textContent = wizard.data.turmaIds.length === 0 ? '+ Selecionar turmas' : `${ic('pencil')} Editar turmas selecionadas`;
   w1Check();
   // Reflete a mudança no bloco multidisciplinar (label "nas turmas selecionadas")
   const discEl = document.getElementById('w-discs-list');
@@ -966,7 +994,7 @@ function renderDisciplinasConfig(lista, turmaIds) {
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px;margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <span style="font-size:12px;font-weight:700;color:var(--cyan)">Disciplina ${i+1}</span>
-        <button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:0 4px" onclick="removerDisciplinaConfig(${i})">✕</button>
+        <button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:0 4px" onclick="removerDisciplinaConfig(${i})">${ic('x')}</button>
       </div>
       <div class="input-group" style="margin-bottom:8px">
         <label class="input-label" style="font-size:10px">Nome da disciplina</label>
@@ -1019,8 +1047,8 @@ function renderDestinatariosList(selecionados) {
   // Modo "todos" (lista vazia = todos)
   if (nSel === 0) {
     return `<div style="font-size:12px;color:var(--text-muted);padding:6px 0">
-      👥 Todos os professores da escola poderão ver esta prova.
-      <button class="btn btn-ghost" style="margin-top:6px;font-size:12px;width:100%" onclick="abrirSeletorDestinatarios()">Restringir para professores específicos →</button>
+      ${ic('users')} Todos os professores da escola poderão ver esta prova.
+      <button class="btn btn-ghost" style="margin-top:6px;font-size:12px;width:100%" onclick="abrirSeletorDestinatarios()">Restringir para professores específicos ${ic('arrow-right')}</button>
     </div>`;
   }
   const nomes = selecionados.map(uid => {
@@ -1030,7 +1058,7 @@ function renderDestinatariosList(selecionados) {
   return `<div style="font-size:12px;color:var(--text-muted);padding:4px 0">
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
       ${nomes.map((n,i) => `<span class="badge badge-cyan" style="font-size:11px">${n}
-        <span style="cursor:pointer;margin-left:4px;opacity:.7" onclick="removerDestinatario('${selecionados[i]}')">✕</span>
+        <span style="cursor:pointer;margin-left:4px;opacity:.7" onclick="removerDestinatario('${selecionados[i]}')">${ic('x')}</span>
       </span>`).join('')}
     </div>
     <div style="display:flex;gap:8px">
@@ -1157,14 +1185,14 @@ function wizardStep2() {
       </div>
       <div class="card" style="background:rgba(0,180,216,0.06);border-color:rgba(0,180,216,0.2)">
         <div style="font-size:13px;color:var(--text-muted);line-height:1.6">
-          💡 No próximo passo você marca a alternativa correta de cada questão.
+          ${ic('lightbulb')} No próximo passo você marca a alternativa correta de cada questão.
           Você pode mudar tudo depois.
         </div>
       </div>
     </div>
     <div class="wizard-footer">
-      <button class="btn btn-ghost" onclick="wizardBack()">← Voltar</button>
-      <button class="btn btn-cyan" onclick="wizardGoStep3()">Próximo →</button>
+      <button class="btn btn-ghost" onclick="wizardBack()">${ic('arrow-left')} Voltar</button>
+      <button class="btn btn-cyan" onclick="wizardGoStep3()">Próximo ${ic('arrow-right')}</button>
     </div>
   `;
 }
@@ -1202,8 +1230,8 @@ function wizardStep3() {
       <div class="gab-list">${rows}</div>
     </div>
     <div class="wizard-footer">
-      <button class="btn btn-ghost" onclick="wizardBack()">← Voltar</button>
-      <button class="btn btn-cyan" onclick="wizardGoStep4()" ${ marcadas<total ? 'disabled' : '' }>Próximo →</button>
+      <button class="btn btn-ghost" onclick="wizardBack()">${ic('arrow-left')} Voltar</button>
+      <button class="btn btn-cyan" onclick="wizardGoStep4()" ${ marcadas<total ? 'disabled' : '' }>Próximo ${ic('arrow-right')}</button>
     </div>
   `;
 }
@@ -1252,7 +1280,7 @@ function wizardStep4() {
     const anul = !!d.anuladas[q];
     rows += `<div class="peso-row ${anul?'anulada':''}">
       <div class="peso-q">${q}.</div>
-      <div class="peso-correct">${anul ? '⊘' : d.gabarito[q]||'?'}</div>
+      <div class="peso-correct">${anul ? `${ic('ban')}` : d.gabarito[q]||'?'}</div>
       <input class="peso-input" type="number" step="0.5" min="0" max="10"
              value="${d.pesos[q]??1}" ${anul?'disabled':''}
              oninput="wizard.data.pesos[${q}]=parseFloat(this.value)||0; w4Resume()">
@@ -1274,7 +1302,7 @@ function wizardStep4() {
       ${rows}
     </div>
     <div class="wizard-footer">
-      <button class="btn btn-ghost" onclick="wizardBack()">← Voltar</button>
+      <button class="btn btn-ghost" onclick="wizardBack()">${ic('arrow-left')} Voltar</button>
       <button class="btn btn-cyan" id="btn-w-save" onclick="salvarProva()">${wizard.editId?'Salvar':'Criar prova'}</button>
     </div>
   `;
@@ -1351,7 +1379,7 @@ async function abrirProva(id) {
       <div class="back-btn" onclick="navTo('provas')">‹</div>
       <div class="detail-title">${escapeHtml(p.nome)}</div>
       ${ (p.criadoPor === app.user?.uid || isGestor())
-        ? `<button class="icon-btn" onclick="editarProva('${p.id}')" title="Editar">✏️</button>`
+        ? `<button class="icon-btn" onclick="editarProva('${p.id}')" title="Editar">${ic('pencil')}</button>`
         : '' }
     </div>
     <div style="padding:0 16px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
@@ -1359,13 +1387,13 @@ async function abrirProva(id) {
       <span class="badge badge-blue">${escapeHtml(turmaNome)}</span>
       <span class="badge badge-yellow">${escapeHtml(p.bimestre||'1')}ª unidade</span>
       ${ p.escopo === 'escola'
-        ? '<span class="badge badge-cyan" style="background:rgba(0,180,216,0.15)">🏫 Escola</span>'
-        : '<span class="badge badge-blue" style="background:rgba(26,86,160,0.15)">🔒 Particular</span>' }
+        ? `<span class="badge badge-cyan" style="background:rgba(0,180,216,0.15)">${ic('school')} Escola</span>`
+        : `<span class="badge badge-blue" style="background:rgba(26,86,160,0.15)">${ic('lock')} Particular</span>` }
       ${ p.arquivada
-        ? '<span class="badge" style="background:rgba(122,154,191,0.15);color:var(--text-muted)">📦 Arquivada</span>'
+        ? `<span class="badge" style="background:rgba(122,154,191,0.15);color:var(--text-muted)">${ic('archive')} Arquivada</span>`
         : '' }
       ${ isGestor() && Array.isArray(p.professoresDestinatarios) && p.professoresDestinatarios.length > 0
-        ? `<span class="badge badge-yellow" title="Prova restrita a professores específicos">👤 ${p.professoresDestinatarios.length} professor(es)</span>`
+        ? `<span class="badge badge-yellow" title="Prova restrita a professores específicos">${ic('user')} ${p.professoresDestinatarios.length} professor(es)</span>`
         : '' }
     </div>
     <div class="info-grid">
@@ -1377,7 +1405,7 @@ async function abrirProva(id) {
 
     <div class="dash-quick-actions" style="padding:0 16px 16px">
       <div class="quick-action" onclick="gerarCartao('${p.id}')">
-        <div class="quick-action-icon yellow">📄</div>
+        <div class="quick-action-icon yellow">${ic('file-text')}</div>
         <div class="quick-action-text">
           <div class="quick-action-title">Gerar cartão-resposta</div>
           <div class="quick-action-sub">PDF imprimível com QR Code</div>
@@ -1385,7 +1413,7 @@ async function abrirProva(id) {
         <div class="quick-action-arrow">›</div>
       </div>
       <div class="quick-action" onclick="iniciarCorrecao('${p.id}')">
-        <div class="quick-action-icon green">📷</div>
+        <div class="quick-action-icon green">${ic('camera')}</div>
         <div class="quick-action-text">
           <div class="quick-action-title">Corrigir prova</div>
           <div class="quick-action-sub">Fotografar cartão preenchido</div>
@@ -1393,7 +1421,7 @@ async function abrirProva(id) {
         <div class="quick-action-arrow">›</div>
       </div>
       <div class="quick-action" onclick="abrirResultadosProva('${p.id}')">
-        <div class="quick-action-icon blue">📊</div>
+        <div class="quick-action-icon blue">${ic('bar-chart-3')}</div>
         <div class="quick-action-text">
           <div class="quick-action-title">Ver resultados</div>
           <div class="quick-action-sub">Notas e correções dos alunos</div>
@@ -1401,7 +1429,7 @@ async function abrirProva(id) {
         <div class="quick-action-arrow">›</div>
       </div>
       <div class="quick-action" onclick="abrirRelatorio('${p.id}')">
-        <div class="quick-action-icon" style="background:rgba(138,43,226,0.18)">📈</div>
+        <div class="quick-action-icon" style="background:rgba(138,43,226,0.18)">${ic('trending-up')}</div>
         <div class="quick-action-text">
           <div class="quick-action-title">Relatório pedagógico</div>
           <div class="quick-action-sub">Análise por questão, ranking e distribuição</div>
@@ -1435,7 +1463,7 @@ async function abrirProva(id) {
     ${ (p.criadoPor === app.user?.uid || isGestor()) ? `
     <div style="padding:0 16px 24px;display:flex;flex-direction:column;gap:8px">
       <button class="btn btn-ghost" onclick="toggleArquivarProva('${p.id}', ${!!p.arquivada})">
-        ${ p.arquivada ? '📂 Desarquivar prova' : '📦 Arquivar prova' }
+        ${ p.arquivada ? `${ic('folder-open')} Desarquivar prova` : `${ic('archive')} Arquivar prova` }
       </button>
       <button class="btn btn-danger" onclick="excluirProva('${p.id}')">Excluir prova</button>
     </div>` : '' }
@@ -1505,7 +1533,7 @@ async function toggleArquivarProva(id, atualmenteArquivada) {
         : 'A prova voltará a aparecer normalmente na listagem.' }
     </div>
     <button class="btn btn-cyan" id="btn-arq-confirm" onclick="confirmaArquivarProva('${id}', ${novoEstado})">
-      ${ novoEstado ? '📦 Arquivar' : '📂 Desarquivar' }
+      ${ novoEstado ? `${ic('archive')} Arquivar` : `${ic('folder-open')} Desarquivar` }
     </button>
     <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
   `);
@@ -1542,6 +1570,39 @@ signOut = async function() {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 
 <style>
+/* ═══════════════════════════════════════════════
+   ÍCONES — Pack padronizado Nota Mestra (Lucide)
+   Traço 2px, arredondado, cor = currentColor
+═══════════════════════════════════════════════ */
+[data-lucide] { display: inline-flex; }
+[data-lucide] svg,
+svg.lucide {
+  width: 1em; height: 1em;
+  stroke-width: 2px;
+  stroke: currentColor;
+  vertical-align: -0.15em;
+  flex-shrink: 0;
+}
+.ic-gold   svg { color: #F5A623; }
+.ic-silver svg { color: #C3CBD4; }
+.ic-bronze svg { color: #C77E43; }
+
+/* Cor dos ícones nos contêineres que hoje não definem cor própria */
+.empty-icon svg        { color: var(--text-dim); }
+.dash-escola-icon svg   { color: var(--cyan); }
+.escola-option-icon.create svg { color: var(--cyan); }
+.escola-option-icon.join   svg { color: #6BAEFF; }
+.quick-action-icon svg { color: var(--text); }
+.quick-action-icon.green  svg { color: #00C882; }
+.quick-action-icon.yellow svg { color: var(--yellow); }
+.quick-action-icon.blue   svg { color: #6BAEFF; }
+.mais-item-icon svg    { color: var(--text); }
+.mais-item-icon[style*="230,57,70"] svg  { color: #FF6B6B; }
+.mais-item-icon[style*="245,166,35"] svg { color: var(--yellow); }
+.mais-item-icon[style*="26,86,160"] svg  { color: #6BAEFF; }
+.mais-item-icon[style*="0,180,216"] svg  { color: var(--cyan); }
+.quick-action-icon[style*="138,43,226"] svg { color: #B69BFF; }
+
 /* ═══════════════════════════════════════════════
    DESIGN SYSTEM — Paleta PE
 ═══════════════════════════════════════════════ */
@@ -2847,7 +2908,7 @@ function showScreenAfterSplash(screenId, callback) {
     <div class="divider">ou</div>
 
     <button class="btn btn-primary" id="btn-email-login" style="opacity:0.6;cursor:not-allowed" disabled>
-      ✉️ &nbsp;Entrar com e-mail
+      ${ic('mail')} &nbsp;Entrar com e-mail
       <span style="font-size:10px;opacity:0.6;margin-left:4px">(em breve)</span>
     </button>
 
@@ -2865,7 +2926,7 @@ function showScreenAfterSplash(screenId, callback) {
   <!-- PASSO 1: Escolher criar ou entrar -->
   <div id="ob-step-1">
     <div class="onboarding-header">
-      <div class="onboarding-step-label">Bem-vindo(a) 👋</div>
+      <div class="onboarding-step-label">Bem-vindo(a) ${ic('hand')}</div>
       <div class="onboarding-title">Vincule sua escola</div>
       <div class="onboarding-sub">
         Todas as provas, turmas e alunos são organizados pela escola.
@@ -2875,14 +2936,14 @@ function showScreenAfterSplash(screenId, callback) {
 
     <div class="onboarding-body">
       <div class="escola-option" id="opt-create" onclick="selectOpt('create')">
-        <div class="escola-option-icon create">🏫</div>
+        <div class="escola-option-icon create">${ic('school')}</div>
         <div class="escola-option-info">
           <div class="escola-option-title">Criar nova escola <span style="font-size:10px;background:rgba(245,166,35,0.2);color:var(--yellow);padding:2px 6px;border-radius:6px;margin-left:4px">Gestor</span></div>
           <div class="escola-option-sub">Sou coordenador(a) ou gestor(a). Vou cadastrar a escola e gerar o código de acesso para professores.</div>
         </div>
       </div>
       <div class="escola-option" id="opt-join" onclick="selectOpt('join')">
-        <div class="escola-option-icon join">🔑</div>
+        <div class="escola-option-icon join">${ic('key')}</div>
         <div class="escola-option-info">
           <div class="escola-option-title">Entrar com código</div>
           <div class="escola-option-sub">Já tenho o código da escola — um colega me passou ou vi na sala dos professores.</div>
@@ -2943,7 +3004,7 @@ function showScreenAfterSplash(screenId, callback) {
       <button class="btn btn-cyan" id="btn-criar-escola" onclick="criarEscola()" disabled>
         Criar escola e gerar código
       </button>
-      <button class="btn btn-ghost" onclick="backToStep1()">← Voltar</button>
+      <button class="btn btn-ghost" onclick="backToStep1()">${ic('arrow-left')} Voltar</button>
     </div>
   </div>
 
@@ -2974,14 +3035,14 @@ function showScreenAfterSplash(screenId, callback) {
       <button class="btn btn-cyan" id="btn-join-escola" onclick="joinEscola()" disabled>
         Entrar na escola
       </button>
-      <button class="btn btn-ghost" onclick="backToStep1()">← Voltar</button>
+      <button class="btn btn-ghost" onclick="backToStep1()">${ic('arrow-left')} Voltar</button>
     </div>
   </div>
 
   <!-- PASSO 3: Código gerado / Sucesso -->
   <div id="ob-step-3" class="hidden">
     <div class="onboarding-header">
-      <div class="onboarding-step-label">Tudo pronto! 🎉</div>
+      <div class="onboarding-step-label">Tudo pronto! ${ic('party-popper')}</div>
       <div class="onboarding-title" id="ob-step3-title">Escola cadastrada</div>
       <div class="onboarding-sub" id="ob-step3-sub">Compartilhe o código abaixo com seus colegas professores para que eles entrem na mesma escola.</div>
     </div>
@@ -2995,7 +3056,7 @@ function showScreenAfterSplash(screenId, callback) {
 
       <div class="card" style="background: rgba(0,180,216,0.07); border-color: rgba(0,180,216,0.2);">
         <div style="font-size:13px; color:var(--text-muted); line-height:1.6;">
-          📌 <strong style="color:var(--text);">Dica:</strong> cole o código na sala dos professores ou no grupo do WhatsApp da escola para que qualquer colega possa entrar.
+          ${ic('map-pin')} <strong style="color:var(--text);">Dica:</strong> cole o código na sala dos professores ou no grupo do WhatsApp da escola para que qualquer colega possa entrar.
         </div>
       </div>
     </div>
@@ -3006,7 +3067,7 @@ function showScreenAfterSplash(screenId, callback) {
         <div class="step-dot active"></div>
       </div>
       <button class="btn btn-cyan" onclick="finishOnboarding()">
-        Começar a usar o app →
+        Começar a usar o app ${ic('arrow-right')}
       </button>
     </div>
   </div>
@@ -3103,7 +3164,7 @@ function showScreenAfterSplash(screenId, callback) {
 <script>
 /* ═══════════════════════════════════════════
    FIREBASE CONFIG
-   ⚠️ Substitua pelos dados do seu projeto
+   ${ic('alert-triangle')} Substitua pelos dados do seu projeto
 ═══════════════════════════════════════════ */
 const firebaseConfig = {
   apiKey:            "AIzaSyD3N6wD-cMV_fTb8vV4t0c7HcvEVQfvRRc",
@@ -3548,11 +3609,11 @@ function inicio() {
   return `
   <div class="dash-header">
     <div class="dash-greeting">${saud},</div>
-    <div class="dash-name">${nome} 👋</div>
+    <div class="dash-name">${nome} ${ic('hand')}</div>
   </div>
 
   <div class="dash-escola-card">
-    <div class="dash-escola-icon">🏫</div>
+    <div class="dash-escola-icon">${ic('school')}</div>
     <div class="dash-escola-info">
       <div class="dash-escola-name">${escola?.nome || '—'}</div>
       <div class="dash-escola-code">${escola?.codigo || '——'}</div>
@@ -3583,7 +3644,7 @@ function inicio() {
   <div class="dash-section-title">Ações rápidas</div>
   <div class="dash-quick-actions">
     <div class="quick-action" onclick="navTo('provas')">
-      <div class="quick-action-icon green">📋</div>
+      <div class="quick-action-icon green">${ic('clipboard-list')}</div>
       <div class="quick-action-text">
         <div class="quick-action-title">Nova prova</div>
         <div class="quick-action-sub">Criar gabarito e gerar cartão-resposta</div>
@@ -3591,7 +3652,7 @@ function inicio() {
       <div class="quick-action-arrow">›</div>
     </div>
     <div class="quick-action" onclick="navTo('provas')">
-      <div class="quick-action-icon yellow">📷</div>
+      <div class="quick-action-icon yellow">${ic('camera')}</div>
       <div class="quick-action-text">
         <div class="quick-action-title">Corrigir prova</div>
         <div class="quick-action-sub">Selecione uma prova para fotografar</div>
@@ -3599,7 +3660,7 @@ function inicio() {
       <div class="quick-action-arrow">›</div>
     </div>
     <div class="quick-action" onclick="navTo('turmas')">
-      <div class="quick-action-icon blue">👥</div>
+      <div class="quick-action-icon blue">${ic('users')}</div>
       <div class="quick-action-text">
         <div class="quick-action-title">Gerenciar turmas</div>
         <div class="quick-action-sub">Adicionar turmas e alunos da escola</div>
@@ -3631,7 +3692,7 @@ function mais() {
   <div class="mais-section">
     <div class="mais-section-title">Escola</div>
     <div class="mais-item" onclick="mostrarCodigo()">
-      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">🔑</div>
+      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">${ic('key')}</div>
       <div class="mais-item-text">
         <div class="mais-item-title">Código da escola</div>
         <div class="mais-item-sub">Compartilhe com professores para que entrem</div>
@@ -3639,14 +3700,14 @@ function mais() {
       <div class="mais-item-arrow">›</div>
     </div>
     <div class="mais-item">
-      <div class="mais-item-icon" style="background:rgba(26,86,160,0.2);">🏫</div>
+      <div class="mais-item-icon" style="background:rgba(26,86,160,0.2);">${ic('school')}</div>
       <div class="mais-item-text">
         <div class="mais-item-title">${app.escola?.nome || '—'}</div>
         <div class="mais-item-sub">${app.escola?.cidade || ''} · ${app.escola?.rede || ''}</div>
       </div>
     </div>
     <div class="mais-item" onclick="abrirSeletorEscolas()">
-      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">🔁</div>
+      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">${ic('repeat')}</div>
       <div class="mais-item-text">
         <div class="mais-item-title">Trocar de escola</div>
         <div class="mais-item-sub">${(app.professor?.escolas||[]).length} escola(s) vinculada(s)</div>
@@ -3655,7 +3716,7 @@ function mais() {
     </div>
     ${ isGestao() ? `
     <div class="mais-item" onclick="abrirEquipe()">
-      <div class="mais-item-icon" style="background:rgba(245,166,35,0.15);">👥</div>
+      <div class="mais-item-icon" style="background:rgba(245,166,35,0.15);">${ic('users')}</div>
       <div class="mais-item-text">
         <div class="mais-item-title">Gerenciar equipe</div>
         <div class="mais-item-sub">Ver, promover e remover membros</div>
@@ -3664,7 +3725,7 @@ function mais() {
     </div>` : '' }
     ${ isDono() ? `
     <div class="mais-item" onclick="mostrarCodigoGestao()">
-      <div class="mais-item-icon" style="background:rgba(245,166,35,0.18);">🛡️</div>
+      <div class="mais-item-icon" style="background:rgba(245,166,35,0.18);">${ic('shield-check')}</div>
       <div class="mais-item-text">
         <div class="mais-item-title">Código de gestão</div>
         <div class="mais-item-sub">Para convidar coordenadores(as) com acesso completo</div>
@@ -3672,7 +3733,7 @@ function mais() {
       <div class="mais-item-arrow">›</div>
     </div>
     <div class="mais-item" onclick="abrirEditarEscola()">
-      <div class="mais-item-icon" style="background:rgba(26,86,160,0.18);">✏️</div>
+      <div class="mais-item-icon" style="background:rgba(26,86,160,0.18);">${ic('pencil')}</div>
       <div class="mais-item-text">
         <div class="mais-item-title">Editar dados da escola</div>
         <div class="mais-item-sub">Nome, cidade, rede</div>
@@ -3680,14 +3741,14 @@ function mais() {
       <div class="mais-item-arrow">›</div>
     </div>
     <div class="mais-item" onclick="confirmExcluirEscola()">
-      <div class="mais-item-icon" style="background:rgba(230,57,70,0.12);">🗑️</div>
+      <div class="mais-item-icon" style="background:rgba(230,57,70,0.12);">${ic('trash-2')}</div>
       <div class="mais-item-text">
         <div class="mais-item-title" style="color:var(--red)">Excluir escola</div>
         <div class="mais-item-sub">Remove a escola e todos os dados desta escola.</div>
       </div>
     </div>` : `
     <div class="mais-item" onclick="confirmSairEscola()">
-      <div class="mais-item-icon" style="background:rgba(230,57,70,0.12);">🚪</div>
+      <div class="mais-item-icon" style="background:rgba(230,57,70,0.12);">${ic('log-out')}</div>
       <div class="mais-item-text">
         <div class="mais-item-title" style="color:var(--red)">Sair desta escola</div>
         <div class="mais-item-sub">Desvincula você apenas desta escola.</div>
@@ -3698,7 +3759,7 @@ function mais() {
   <div class="mais-section">
     <div class="mais-section-title">Meu perfil</div>
     <div class="mais-item" onclick="abrirEditarDisciplinas()">
-      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">📚</div>
+      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">${ic('book-copy')}</div>
       <div class="mais-item-text">
         <div class="mais-item-title">Minhas disciplinas</div>
         <div class="mais-item-sub">${(app.professor?.disciplinas||[]).length > 0 ? escapeHtml((app.professor.disciplinas).join(', ')) : 'Nenhuma definida ainda'}</div>
@@ -3710,7 +3771,7 @@ function mais() {
   <div class="mais-section">
     <div class="mais-section-title">Integração</div>
     <div class="mais-item" onclick="abrirConexaoNM()">
-      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">🔗</div>
+      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">${ic('link')}</div>
       <div class="mais-item-text">
         <div class="mais-item-title">Conectar ao Nota Mestra</div>
         <div class="mais-item-sub">${ nmLink.user ? `Conectado como ${escapeHtml(nmLink.user.email||nmLink.user.displayName||'')} · ${nmLink.turmas.length} turma(s)` : 'Necessário para importar notas direto pra lá' }</div>
@@ -3718,7 +3779,7 @@ function mais() {
       <div class="mais-item-arrow">›</div>
     </div>
     <div class="mais-item" onclick="abrirExportacaoNM()">
-      <div class="mais-item-icon" style="background:rgba(245,166,35,0.15);">📤</div>
+      <div class="mais-item-icon" style="background:rgba(245,166,35,0.15);">${ic('upload')}</div>
       <div class="mais-item-text">
         <div class="mais-item-title">Exportar para Nota Mestra</div>
         <div class="mais-item-sub">JSON por turma e prova, compatível com o backup</div>
@@ -3730,7 +3791,7 @@ function mais() {
   <div class="mais-section">
     <div class="mais-section-title">Conta</div>
     <div class="mais-item" onclick="confirmSignOut()">
-      <div class="mais-item-icon" style="background:rgba(230,57,70,0.12);">🚪</div>
+      <div class="mais-item-icon" style="background:rgba(230,57,70,0.12);">${ic('log-out')}</div>
       <div class="mais-item-text">
         <div class="mais-item-title" style="color:var(--red)">Sair da conta</div>
         <div class="mais-item-sub">Você precisará entrar novamente</div>
@@ -3824,7 +3885,7 @@ function confirmExcluirEscola() {
   closeModal();
   showModal(`
     <div class="modal-handle"></div>
-    <div class="modal-title" style="color:var(--red)">⚠️ Excluir escola?</div>
+    <div class="modal-title" style="color:var(--red)">${ic('alert-triangle')} Excluir escola?</div>
     <div style="font-size:14px;color:var(--text-muted);line-height:1.6;">
       Isso irá excluir permanentemente <strong style="color:var(--text)">${app.escola?.nome || 'esta escola'}</strong> e <strong style="color:var(--text)">todos os dados</strong> (provas, turmas, alunos e resultados).<br><br>
       <span style="color:var(--red)">Esta ação não pode ser desfeita.</span>
@@ -4002,12 +4063,12 @@ function abrirSeletorEscolas() {
     : escolas.map(e => `
       <div onclick="trocarEscolaAtiva('${e.escolaId}')"
         style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:${e.escolaId===app.escolaId?'rgba(0,180,216,0.12)':'var(--surface2)'};border:1px solid ${e.escolaId===app.escolaId?'var(--cyan)':'var(--border2)'}">
-        <div style="width:38px;height:38px;border-radius:10px;background:rgba(26,86,160,0.18);display:flex;align-items:center;justify-content:center;font-size:18px">🏫</div>
+        <div style="width:38px;height:38px;border-radius:10px;background:rgba(26,86,160,0.18);display:flex;align-items:center;justify-content:center;font-size:18px">${ic('school')}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(e.escolaNome||'—')}</div>
           <div style="font-size:11px;color:var(--text-muted)">${papelLabel(e.role)}${e.escolaId===app.escolaId?' · Ativa':''}</div>
         </div>
-        ${e.escolaId===app.escolaId?'<span style="color:var(--cyan);font-size:18px">✓</span>':''}
+        ${e.escolaId===app.escolaId?`<span style="color:var(--cyan);font-size:18px">${ic('check')}</span>`:''}
       </div>`).join('');
   showModal(`
     <div class="modal-handle"></div>
@@ -4251,8 +4312,8 @@ async function abrirEquipe() {
         const podeEditar = isGestao() && !ehDono && !eu;
         const acoes = !podeEditar ? '' : `
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-            ${m.papelNesta==='professor' ? `<button onclick="alterarPapelMembro('${m.uid}','coordenador')" style="padding:5px 9px;border-radius:7px;background:rgba(245,166,35,0.15);border:1px solid rgba(245,166,35,0.3);color:var(--yellow);font-size:11px;font-weight:600;cursor:pointer">↑ Promover a coord.</button>` : ''}
-            ${m.papelNesta==='coordenador' ? `<button onclick="alterarPapelMembro('${m.uid}','professor')" style="padding:5px 9px;border-radius:7px;background:rgba(26,86,160,0.12);border:1px solid rgba(26,86,160,0.25);color:var(--blue);font-size:11px;font-weight:600;cursor:pointer">↓ Rebaixar a prof.</button>` : ''}
+            ${m.papelNesta==='professor' ? `<button onclick="alterarPapelMembro('${m.uid}','coordenador')" style="padding:5px 9px;border-radius:7px;background:rgba(245,166,35,0.15);border:1px solid rgba(245,166,35,0.3);color:var(--yellow);font-size:11px;font-weight:600;cursor:pointer">${ic('arrow-up')} Promover a coord.</button>` : ''}
+            ${m.papelNesta==='coordenador' ? `<button onclick="alterarPapelMembro('${m.uid}','professor')" style="padding:5px 9px;border-radius:7px;background:rgba(26,86,160,0.12);border:1px solid rgba(26,86,160,0.25);color:var(--blue);font-size:11px;font-weight:600;cursor:pointer">${ic('arrow-down')} Rebaixar a prof.</button>` : ''}
             <button onclick="confirmarRemoverProf('${m.uid}','${escapeHtml(m.nome||'').replace(/'/g, "\\'")}')" style="padding:5px 9px;border-radius:7px;background:rgba(230,57,70,0.1);border:1px solid rgba(230,57,70,0.25);color:var(--red);font-size:11px;font-weight:600;cursor:pointer">Remover</button>
           </div>`;
         const badgeCor = ehDono ? 'yellow' : (m.papelNesta==='coordenador'?'cyan':'blue');
@@ -4432,10 +4493,10 @@ function abrirConexaoNM() {
     </div>
     ${ conectado ? `
       <div class="nm-msg success" style="margin-bottom:10px">
-        ✅ Conectado como <strong>${escapeHtml(nmLink.user.email || nmLink.user.displayName || '')}</strong><br>
+        ${ic('check-circle')} Conectado como <strong>${escapeHtml(nmLink.user.email || nmLink.user.displayName || '')}</strong><br>
         ${nmLink.turmas.length} turma(s) carregada(s) do Nota Mestra.
       </div>
-      <button class="btn btn-cyan" id="btn-nm-atualizar" onclick="carregarTurmasNM(true)">🔄 Atualizar turmas</button>
+      <button class="btn btn-cyan" id="btn-nm-atualizar" onclick="carregarTurmasNM(true)">${ic('refresh-cw')} Atualizar turmas</button>
       <button class="btn btn-ghost" id="btn-nm-desconectar" onclick="desconectarNM()" style="margin-top:8px">Desconectar</button>
     ` : `
       <div class="input-group">
@@ -4740,7 +4801,7 @@ function renderFormImportacaoNM() {
     ${atividadeHtml}
 
     <button class="btn btn-cyan" id="btn-imp-nm-continuar" onclick="continuarImportacaoNM()" ${ podeContinuar ? '' : 'disabled' }>
-      Continuar →
+      Continuar ${ic('arrow-right')}
     </button>
     <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Cancelar</button>
   `);
@@ -4893,7 +4954,7 @@ function renderConfirmacaoImportacaoNM() {
       </td>
       <td style="font-size:.75rem;padding:4px 6px;text-align:center">
         ${ p.matchIdx >= 0
-          ? `<span style="color:#4CD964;font-weight:700">✓ ${escapeHtml(p.nomeDestino)}</span>`
+          ? `<span style="color:#4CD964;font-weight:700">${ic('check')} ${escapeHtml(p.nomeDestino)}</span>`
           : `<span style="color:var(--red);font-size:.7rem">Não encontrado</span>` }
       </td>
     </tr>`).join('');
@@ -4902,7 +4963,7 @@ function renderConfirmacaoImportacaoNM() {
     <div class="modal-handle"></div>
     <div class="modal-title">Confirmar importação</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
-      ${escapeHtml(prova?.nome || '')} → <strong>${escapeHtml(turmaDestino?.nome || '')}</strong> ·
+      ${escapeHtml(prova?.nome || '')} ${ic('arrow-right')} <strong>${escapeHtml(turmaDestino?.nome || '')}</strong> ·
       ${escapeHtml(unidade?.label || '')} ·
       ${ _impNM.tipo === 'prova' ? 'Prova da unidade' : `Atividade (${_impNM.atividadeAlvo.replace('atv','')}ª)` }
       ${ _impNM.disciplina ? ' · ' + escapeHtml(_impNM.disciplina) : '' }
@@ -4910,7 +4971,7 @@ function renderConfirmacaoImportacaoNM() {
 
     ${ provaNaoVale10 ? `
       <div class="nm-msg" style="margin-bottom:8px;background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.3);color:var(--yellow)">
-        ℹ️ Essa prova vale ${maxProva} (soma dos pesos das questões), não 10. As notas abaixo são
+        ℹ Essa prova vale ${maxProva} (soma dos pesos das questões), não 10. As notas abaixo são
         enviadas exatamente nesse valor — sem reescalar pra 0–10. Se não era isso que você queria,
         ajuste os pesos da prova no Leitor pra somarem 10 antes de importar.
       </div>` : '' }
@@ -4919,7 +4980,7 @@ function renderConfirmacaoImportacaoNM() {
       const dataEnvio = new Date(envioAnterior.enviadoEm).toLocaleString('pt-BR');
       if (statusAnterior === 'aplicado') {
         return `<div class="nm-msg" style="margin-bottom:8px;background:rgba(76,217,100,0.12);border:1px solid rgba(76,217,100,0.3);color:#4CD964">
-          ✅ Você já importou isso em ${dataEnvio} (${envioAnterior.qtdAlunos} aluno(s)) e já foi <strong>aplicado</strong>
+          ${ic('check-circle')} Você já importou isso em ${dataEnvio} (${envioAnterior.qtdAlunos} aluno(s)) e já foi <strong>aplicado</strong>
           no Nota Mestra. Enviar de novo só faz sentido se for uma correção — as notas serão sobrescritas lá quando você aplicar de novo.
         </div>`;
       }
@@ -4932,12 +4993,12 @@ function renderConfirmacaoImportacaoNM() {
       }
       if (statusAnterior === 'excluido') {
         return `<div class="nm-msg info" style="margin-bottom:8px">
-          ℹ️ Você importou isso em ${dataEnvio}, mas foi <strong>excluído</strong> sem ser aplicado — pode
+          ℹ Você importou isso em ${dataEnvio}, mas foi <strong>excluído</strong> sem ser aplicado — pode
           enviar de novo tranquilamente.
         </div>`;
       }
       return `<div class="nm-msg error" style="margin-bottom:8px">
-        ⚠️ Você já importou essa mesma combinação (turma, unidade, ${_impNM.tipo === 'prova' ? 'prova' : 'atividade'})
+        ${ic('alert-triangle')} Você já importou essa mesma combinação (turma, unidade, ${_impNM.tipo === 'prova' ? 'prova' : 'atividade'})
         em ${dataEnvio} (${envioAnterior.qtdAlunos} aluno(s)), mas não consegui confirmar o status atual lá no
         Nota Mestra agora. Enviar de novo pode duplicar notas se aquele envio já tiver sido aplicado.
       </div>`;
@@ -4970,7 +5031,7 @@ function renderConfirmacaoImportacaoNM() {
 
     <button class="btn btn-cyan" id="btn-imp-nm-confirmar" style="margin-top:10px" onclick="confirmarEnvioNM()"
       ${ enviaveis.length ? '' : 'disabled' }>
-      ✅ Confirmar importação (${enviaveis.length} aluno${enviaveis.length === 1 ? '' : 's'})
+      ${ic('check-circle')} Confirmar importação (${enviaveis.length} aluno${enviaveis.length === 1 ? '' : 's'})
     </button>
     <button class="btn btn-ghost" style="margin-top:8px" onclick="renderFormImportacaoNM()">‹ Voltar</button>
   `);
@@ -5070,7 +5131,7 @@ function px(mm) { return Math.round(mm * CARTAO.DPI / 25.4); }
 
 /* ─────────────────────────────────────────────────
    ALGORITMO DE LAYOUT
-   Prioridade: portrait → landscape
+   Prioridade: portrait ${ic('arrow-right')} landscape
    Preenche a altura disponível escalando rowH
 ───────────────────────────────────────────────── */
 function calcLayout(nQ, nA) {
@@ -5392,8 +5453,8 @@ async function gerarCartao(provaId) {
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <button class="btn btn-cyan" onclick="downloadPNG()">⬇ PNG</button>
-        <button class="btn btn-primary" onclick="downloadPDF()">⬇ PDF</button>
+        <button class="btn btn-cyan" onclick="downloadPNG()">${ic('download')} PNG</button>
+        <button class="btn btn-primary" onclick="downloadPDF()">${ic('download')} PDF</button>
       </div>
       <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
     `);
@@ -5440,7 +5501,7 @@ function downloadPDF() {
 
 /* ═══════════════════════════════════════════════════════════════
    ETAPA 4 — CORREÇÃO DE GABARITOS POR CÂMERA
-   Fluxo: seleção aluno → câmera → captura → OpenCV → conferência → salvar
+   Fluxo: seleção aluno ${ic('arrow-right')} câmera ${ic('arrow-right')} captura ${ic('arrow-right')} OpenCV ${ic('arrow-right')} conferência ${ic('arrow-right')} salvar
 ═══════════════════════════════════════════════════════════════ */
 
 /* ── Estado da sessão de correção ── */
@@ -5789,10 +5850,10 @@ function abrirCamera() {
     <canvas id="e4-canvas"></canvas>
 
     <div class="e4-cam-top">
-      <div class="e4-cam-close" onclick="fecharCamera()">✕</div>
+      <div class="e4-cam-close" onclick="fecharCamera()">${ic('x')}</div>
       <div class="e4-cam-info">
         <div class="e4-cam-prova">${escapeHtml(corr.prova.nome)}</div>
-        <div class="e4-cam-aluno">📍 ${escapeHtml(corr.aluno.nome)}</div>
+        <div class="e4-cam-aluno">${ic('map-pin')} ${escapeHtml(corr.aluno.nome)}</div>
       </div>
     </div>
 
@@ -5808,14 +5869,14 @@ function abrirCamera() {
 
     <div class="e4-cam-bar">
       <div class="e4-cam-side" onclick="fecharCamera()">
-        <div class="e4-cam-side-btn">✕</div>
+        <div class="e4-cam-side-btn">${ic('x')}</div>
         <div class="e4-cam-side-lbl">Cancelar</div>
       </div>
       <div class="e4-shutter" onclick="fotografar()">
         <div class="e4-shutter-inner"></div>
       </div>
       <div class="e4-cam-side" onclick="trocarCamera()">
-        <div class="e4-cam-side-btn">🔄</div>
+        <div class="e4-cam-side-btn">${ic('refresh-cw')}</div>
         <div class="e4-cam-side-lbl">Girar</div>
       </div>
     </div>
@@ -6171,7 +6232,7 @@ function mostrarErroProcessamento(msg) {
     <div class="modal-title" style="color:var(--red)">Não consegui ler o cartão</div>
     <div style="font-size:13px;color:var(--text-muted);line-height:1.6">${escapeHtml(msg)}</div>
     <div style="padding:12px;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);border-radius:10px;font-size:13px;color:var(--yellow);line-height:1.5">
-      💡 <strong>Dicas:</strong> iluminação uniforme, cartão completamente dentro do guia, câmera estabilizada.
+      ${ic('lightbulb')} <strong>Dicas:</strong> iluminação uniforme, cartão completamente dentro do guia, câmera estabilizada.
     </div>
     <button class="btn btn-cyan" onclick="closeModal();abrirCamera()">Tentar novamente</button>
     <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
@@ -6214,7 +6275,7 @@ function mostrarConferencia(warpedCanvas, resultado) {
   const header = document.createElement('div');
   header.className = 'e4-conf-header';
   header.innerHTML = `
-    <div class="wizard-back-btn" onclick="descartarConferencia()">←</div>
+    <div class="wizard-back-btn" onclick="descartarConferencia()">${ic('arrow-left')}</div>
     <div>
       <div class="e4-conf-title">${escapeHtml(corr.aluno.nome)}</div>
       <div class="e4-conf-sub">${escapeHtml(prova.nome)} · Confira e corrija se necessário</div>
@@ -6269,13 +6330,13 @@ function renderQList() {
     if (anulada) {
       status = 'anulada'; detClass = 'anulada'; detLabel = '—'; rowClass = 'anulada'; warnIcon = '';
     } else if (revisada !== undefined) {
-      status = 'revisada'; detClass = 'revisada'; detLabel = revisada === 'ANULADA' ? '✕' : revisada; rowClass = 'revisada'; warnIcon = '✏️';
+      status = 'revisada'; detClass = 'revisada'; detLabel = revisada === 'ANULADA' ? `${ic('x')}` : revisada; rowClass = 'revisada'; warnIcon = ic('pencil');
     } else if (dupla) {
-      status = 'dupla'; detClass = 'dupla'; detLabel = resp || '?'; rowClass = 'dupla'; warnIcon = '⚠️';
+      status = 'dupla'; detClass = 'dupla'; detLabel = resp || '?'; rowClass = 'dupla'; warnIcon = ic('alert-triangle');
     } else if (!resp) {
-      status = 'vazia'; detClass = 'vazia'; detLabel = '·'; rowClass = 'vazia'; warnIcon = '❓';
+      status = 'vazia'; detClass = 'vazia'; detLabel = '·'; rowClass = 'vazia'; warnIcon = ic('help-circle');
     } else if (resp === gabarito) {
-      status = 'ok'; detClass = 'ok'; detLabel = resp; rowClass = 'ok'; warnIcon = '✓';
+      status = 'ok'; detClass = 'ok'; detLabel = resp; rowClass = 'ok'; warnIcon = ic('check');
     } else {
       status = 'wrong'; detClass = 'wrong'; detLabel = resp; rowClass = ''; warnIcon = '';
     }
@@ -6333,9 +6394,9 @@ function renderNota() {
       <div class="e4-nota-max">/ ${max.toFixed(1)}</div>
     </div>
     ${disciplinasHtml}
-    ${avisos > 0 ? `<div style="font-size:12px;color:var(--yellow);text-align:center;line-height:1.5">⚠️ ${duplas > 0 ? duplas+' dupla'+( duplas>1?'s':'')+' marcação' : ''} ${duplas>0&&vazias>0?'· ':''} ${vazias > 0 ? vazias+' questão'+( vazias>1?'ões':'')+' em branco' : ''} — toque para resolver</div>` : ''}
+    ${avisos > 0 ? `<div style="font-size:12px;color:var(--yellow);text-align:center;line-height:1.5">${ic('alert-triangle')} ${duplas > 0 ? duplas+' dupla'+( duplas>1?'s':'')+' marcação' : ''} ${duplas>0&&vazias>0?'· ':''} ${vazias > 0 ? vazias+' questão'+( vazias>1?'ões':'')+' em branco' : ''} — toque para resolver</div>` : ''}
     <button class="btn btn-cyan" ${avisos>0?'style="opacity:.7"':''} onclick="confirmarSalvar()">
-      ${avisos > 0 ? '⚠️ Salvar mesmo assim' : '✓ Confirmar e salvar'}
+      ${avisos > 0 ? `${ic('alert-triangle')} Salvar mesmo assim` : `${ic('check')} Confirmar e salvar`}
     </button>
     <button class="btn btn-ghost" onclick="descartarConferencia()">Descartar</button>
   `;
@@ -6414,8 +6475,8 @@ function abrirSeletorAlt(q) {
       <div class="e4-alt-title">Questão ${q}</div>
       <div class="e4-alt-sub">Gabarito: <strong style="color:var(--cyan)">${gabarito || '—'}</strong> · Detectada: <strong style="color:var(--yellow)">${detectada || 'nenhuma'}</strong>${revisada !== undefined ? ` · Revisão: <strong style="color:var(--cyan)">${revisada === 'ANULADA' ? 'Anulada' : revisada}</strong>` : ''}</div>
       <div class="e4-alt-grid">${btns}</div>
-      <div class="e4-alt-btn anular" onclick="aplicarRevisao(${q},'ANULADA')">✕ Anular esta questão</div>
-      ${revisada !== undefined ? `<div class="e4-alt-btn" style="border-color:var(--border);color:var(--text-muted);margin-top:8px;min-width:100%;max-width:none;height:40px;border-radius:var(--r-md);font-size:13px" onclick="removerRevisao(${q})">↩ Usar resultado detectado</div>` : ''}
+      <div class="e4-alt-btn anular" onclick="aplicarRevisao(${q},'ANULADA')">${ic('x')} Anular esta questão</div>
+      ${revisada !== undefined ? `<div class="e4-alt-btn" style="border-color:var(--border);color:var(--text-muted);margin-top:8px;min-width:100%;max-width:none;height:40px;border-radius:var(--r-md);font-size:13px" onclick="removerRevisao(${q})">${ic('undo-2')} Usar resultado detectado</div>` : ''}
     </div>
   `;
   document.body.appendChild(sheet);
@@ -6637,11 +6698,11 @@ async function executarSalvar() {
     }
 
     document.getElementById('e4-conf-overlay')?.remove();
-    toast(`✓ Nota: ${nota.toFixed(1)} / ${notaMax.toFixed(1)} — salvo!`, 'success');
+    toast(`${ic('check')} Nota: ${nota.toFixed(1)} / ${notaMax.toFixed(1)} — salvo!`, 'success');
 
   } catch (e) {
     toast('Erro ao salvar: ' + e.message, 'error');
-    if (btn) { btn.disabled = false; btn.innerHTML = '✓ Confirmar e salvar'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = `${ic('check')} Confirmar e salvar`; }
   }
 }
 
@@ -6675,7 +6736,7 @@ async function abrirRecalculoPesos(provaId) {
       Só quem realmente mudar de nota é regravado.
     </div>
     <button class="btn btn-cyan" id="btn-recalc-confirmar" onclick="executarRecalculoPesos('${provaId}')">
-      🔄 Recalcular agora
+      ${ic('refresh-cw')} Recalcular agora
     </button>
     <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Cancelar</button>
   `);
@@ -6724,8 +6785,8 @@ async function executarRecalculoPesos(provaId) {
 
 /* ═══════════════════════════════════════════════════════════════
    ETAPA 7 — EXPORTAÇÃO PARA NOTA MESTRA (backup JSON por turma)
-   Fluxo: escolher turma → escolher prova já corrigida → escolher
-   se vira "Prova da unidade" ou "Atividade" → gerar e baixar o
+   Fluxo: escolher turma ${ic('arrow-right')} escolher prova já corrigida ${ic('arrow-right')} escolher
+   se vira "Prova da unidade" ou "Atividade" ${ic('arrow-right')} gerar e baixar o
    JSON no mesmo formato do backup completo de turma do Nota Mestra
    (setup + grades.atividades/prova/extras/uiConfig), preenchendo
    apenas o campo escolhido — o resto fica vazio, pronto pra restaurar.
@@ -7142,13 +7203,13 @@ async function abrirResultadosProva(provaId) {
     </div>
     <div style="padding:0 16px 32px">
       <button class="btn btn-primary" style="width:100%" onclick="abrirImportacaoNM('${p.id}')">
-        📥 Importar para o Nota Mestra
+        ${ic('upload')} Importar para o Nota Mestra
       </button>
       <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="abrirRecalculoPesos('${p.id}')">
-        🔄 Recalcular com pesos atuais
+        ${ic('refresh-cw')} Recalcular com pesos atuais
       </button>
       <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="exportarResultadosPDF()">
-        🖨️ Exportar PDF
+        ${ic('printer')} Exportar PDF
       </button>
       <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:6px">
         Salvar como PDF · funciona no app Android e no navegador
@@ -7239,7 +7300,7 @@ async function renderResultadosProva() {
   if (!alunos.length && !corrigidos.length) {
     listEl.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">📭</div>
+        <div class="empty-icon">${ic('inbox')}</div>
         <div class="empty-title">Sem alunos</div>
         <div class="empty-sub">Cadastre alunos na turma para visualizar resultados.</div>
       </div>`;
@@ -7262,7 +7323,7 @@ async function renderResultadosProva() {
     if (r) {
       const cls = classNota(r.nota||0, r.notaMax||1);
       const btnExcluir = podeExcluirCorrecao(prova, r)
-        ? `<button class="icon-btn danger" title="Excluir correção" onclick="event.stopPropagation();excluirCorrecao('${r.id}','${escapeHtml(a.nome).replace(/'/g,"\\'")}','${provaId}')">🗑️</button>`
+        ? `<button class="icon-btn danger" title="Excluir correção" onclick="event.stopPropagation();excluirCorrecao('${r.id}','${escapeHtml(a.nome).replace(/'/g,"\\'")}','${provaId}')">${ic('trash-2')}</button>`
         : '';
       return `
         <div class="res-row" onclick="abrirDetalheResultado('${r.id}')" style="display:flex;align-items:center;gap:10px">
@@ -7376,7 +7437,7 @@ async function abrirDetalheResultado(resultadoId) {
     else if (d.status === 'correta') cellCls = 'ok';
     else if (d.status === 'errada') cellCls = 'bad';
     const resp = d.resp && d.resp !== 'ANULADA' ? d.resp : '—';
-    const sub = d.status === 'errada' && gabarito ? `<div style="font-size:9px;color:var(--text-muted);margin-top:2px">✓ ${gabarito}</div>` : '';
+    const sub = d.status === 'errada' && gabarito ? `<div style="font-size:9px;color:var(--text-muted);margin-top:2px">${ic('check')} ${gabarito}</div>` : '';
     cells += `<div class="res-q-cell ${cellCls}"><div class="q-num">${q}</div><div class="q-resp">${resp}</div>${sub}</div>`;
   }
 
@@ -7387,7 +7448,7 @@ async function abrirDetalheResultado(resultadoId) {
     </div>
     <div style="padding:0 16px 8px">
       <div style="font-size:13px;color:var(--text-muted)">${escapeHtml(r.provaNome||'')}</div>
-      ${r.multidisciplinar ? '<span class="badge badge-cyan" style="margin-top:4px;display:inline-flex">📚 Multidisciplinar</span>' : ''}
+      ${r.multidisciplinar ? `<span class="badge badge-cyan" style="margin-top:4px;display:inline-flex">${ic('book-copy')} Multidisciplinar</span>` : ''}
     </div>
     <div class="res-summary">
       <div class="stat-card"><div class="stat-label">Nota</div><div class="stat-value ${cls==='ok'?'cyan':cls==='warn'?'yellow':''}" ${cls==='fail'?'style="color:#e31b23"':''}>${fmtNota(r.nota||0)}</div></div>
@@ -7395,10 +7456,10 @@ async function abrirDetalheResultado(resultadoId) {
       <div class="stat-card"><div class="stat-label">Acertos</div><div class="stat-value cyan">${acertos}</div></div>
     </div>
     <div style="padding:0 16px 8px;display:flex;gap:6px;flex-wrap:wrap">
-      <span class="badge badge-cyan">✓ ${acertos} acerto${acertos===1?'':'s'}</span>
-      <span class="badge" style="background:rgba(227,27,35,.15);color:#e31b23">✗ ${erros} erro${erros===1?'':'s'}</span>
-      ${brancos ? `<span class="badge" style="background:var(--surface2);color:var(--text-dim)">○ ${brancos} branco${brancos===1?'':'s'}</span>` : ''}
-      ${anuladas ? `<span class="badge badge-yellow">⊘ ${anuladas} anulada${anuladas===1?'':'s'}</span>` : ''}
+      <span class="badge badge-cyan">${ic('check')} ${acertos} acerto${acertos===1?'':'s'}</span>
+      <span class="badge" style="background:rgba(227,27,35,.15);color:#e31b23">${ic('x-circle')} ${erros} erro${erros===1?'':'s'}</span>
+      ${brancos ? `<span class="badge" style="background:var(--surface2);color:var(--text-dim)">${ic('circle')} ${brancos} branco${brancos===1?'':'s'}</span>` : ''}
+      ${anuladas ? `<span class="badge badge-yellow">${ic('ban')} ${anuladas} anulada${anuladas===1?'':'s'}</span>` : ''}
     </div>
     ${ r.multidisciplinar && r.notasPorDisciplina && Object.keys(r.notasPorDisciplina).length > 0 ? `
     <div class="dash-section-title">Nota por disciplina</div>
@@ -7464,7 +7525,7 @@ async function abrirBoletimAluno(alunoId) {
   if (!meus.length) {
     secoes = `
       <div class="empty-state">
-        <div class="empty-icon">📋</div>
+        <div class="empty-icon">${ic('clipboard-list')}</div>
         <div class="empty-title">Sem correções</div>
         <div class="empty-sub">Este aluno ainda não tem provas corrigidas.</div>
       </div>`;
@@ -7786,13 +7847,13 @@ function relRender(bodyEl) {
         <div class="rl">Menor nota</div>
       </div>
     </div>
-    ${total === 0 ? `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">📭</div><div class="empty-title">Nenhuma correção ainda</div><div class="empty-sub">Corrija provas para ver o relatório.</div></div>` : ''}
+    ${total === 0 ? `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">${ic('inbox')}</div><div class="empty-title">Nenhuma correção ainda</div><div class="empty-sub">Corrija provas para ver o relatório.</div></div>` : ''}
   `;
 
   // Destaques: 3 piores questões
   const pioresHtml = piores3.length && total > 0 ? `
     <div class="rel-card">
-      <div class="rel-card-title">⚠️ Questões com menor acerto</div>
+      <div class="rel-card-title">${ic('alert-triangle')} Questões com menor acerto</div>
       ${piores3.map(({ q, pct }) => `
         <div class="rel-q-destaque low">
           <span class="rel-q-num">Q${q}</span>
@@ -7805,10 +7866,10 @@ function relRender(bodyEl) {
 
   // ── Abas ──
   const abas = [
-    { id: 'questoes', label: '📊 Por questão' },
-    { id: 'distribuicao', label: '📉 Distribuição' },
-    { id: 'ranking', label: '🏆 Ranking' },
-    { id: 'distratores', label: '🔍 Distratores' },
+    { id: 'questoes', label: `${ic('bar-chart-3')} Por questão` },
+    { id: 'distribuicao', label: `${ic('trending-down')} Distribuição` },
+    { id: 'ranking', label: `${ic('trophy')} Ranking` },
+    { id: 'distratores', label: `${ic('search')} Distratores` },
   ];
 
   const tabsHtml = `
@@ -7852,12 +7913,12 @@ function relRender(bodyEl) {
 
   } else if (_rel.abaAtiva === 'ranking') {
     abaHtml = ranking.length === 0
-      ? `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">🏆</div><div class="empty-title">Sem dados</div></div>`
+      ? `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">${ic('trophy')}</div><div class="empty-title">Sem dados</div></div>`
       : `<div class="rel-card" style="padding:0 0 4px">
           <div style="padding:12px 16px 0"><div class="rel-card-title">${multiplasTurmasRel && _rel.filtroTurma==='all' ? 'Ranking geral' : 'Ranking da turma'}</div></div>
           ${ranking.map((r,i) => {
             const cls = r.nota >= 7 ? 'var(--cyan)' : r.nota >= 5 ? '#fdb913' : '#e31b23';
-            const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+            const medal = i===0?ic('medal','gold'):i===1?ic('medal','silver'):i===2?ic('medal','bronze'):'';
             const mostrarTurma = multiplasTurmasRel && _rel.filtroTurma==='all' && r.turmaNome;
             return `
               <div class="rel-rank-row">
@@ -7870,7 +7931,7 @@ function relRender(bodyEl) {
 
   } else if (_rel.abaAtiva === 'distratores') {
     if (total === 0) {
-      abaHtml = `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">🔍</div><div class="empty-title">Sem dados</div></div>`;
+      abaHtml = `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">${ic('search')}</div><div class="empty-title">Sem dados</div></div>`;
     } else {
       const validQs = Array.from({length: nQ}, (_,i)=>i+1).filter(q => !p.anuladas?.[q]);
       abaHtml = `
@@ -7914,7 +7975,7 @@ function relRender(bodyEl) {
     + (total > 0 ? `
       <div style="padding:16px 16px 32px">
         <button class="btn btn-primary" style="width:100%" onclick="exportarRelatorioPDF()">
-          🖨️ Exportar PDF
+          ${ic('printer')} Exportar PDF
         </button>
         <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:6px">
           Salvar como PDF · funciona no app Android e no navegador
@@ -8080,7 +8141,10 @@ function _lgAbrirJanelaImpressao(html, orientacao){
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Leitor de Gabaritos — Impressão</title>
 ${style}
-<style>body{padding:10mm 8mm;} .no-print{display:none!important;} @media print{.no-print{display:none!important;}}</style>
+<style>body{padding:10mm 8mm;} .no-print{display:none!important;} @media print{.no-print{display:none!important;}}
+[data-lucide] svg{width:1em;height:1em;stroke-width:2px;stroke:currentColor;vertical-align:-0.15em;}</style>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"><\/script>
+<script>function ic(name){return '<i data-lucide="'+name+'"></i>';}<\/script>
 </head>
 <body class="${o}">
 ${html}
@@ -8111,9 +8175,9 @@ ${html}
     overlay.id = 'lg-print-overlay';
     overlay.innerHTML = `
       <div class="lg-bar">
-        <span>📄 Prévia — pronto para imprimir</span>
-        <button type="button" id="lg-close-btn" class="cinza">✕ Fechar</button>
-        <button type="button" id="lg-print-btn">🖨️ Salvar PDF</button>
+        <span>${ic('file-text')} Prévia — pronto para imprimir</span>
+        <button type="button" id="lg-close-btn" class="cinza">${ic('x')} Fechar</button>
+        <button type="button" id="lg-print-btn">${ic('printer')} Salvar PDF</button>
       </div>
       <div id="lg-preview-scroll"><div id="lg-preview-page"></div></div>
     `;
@@ -8143,10 +8207,10 @@ ${html}
   /* ── Modo web: nova janela com auto-print ── */
   const fullHtml = buildFullHtml().replace('</body>', `
 <div class="no-print" style="position:fixed;top:10px;right:10px;display:flex;gap:8px;z-index:9999;">
-  <button onclick="window.print()" style="background:#0056b3;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem;">🖨️ Imprimir / Salvar PDF</button>
-  <button onclick="window.close()" style="background:#6c757d;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem;">✕ Fechar</button>
+  <button onclick="window.print()" style="background:#0056b3;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem;">${ic('printer')} Imprimir / Salvar PDF</button>
+  <button onclick="window.close()" style="background:#6c757d;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem;">${ic('x')} Fechar</button>
 </div>
-<script>window.onload=function(){setTimeout(function(){window.print();},500);};<\/script>
+<script>window.onload=function(){if(window.lucide)lucide.createIcons();setTimeout(function(){window.print();},500);};<\/script>
 </body>`);
 
   const win = window.open('', '_blank', 'width=900,height=700');
@@ -8192,7 +8256,7 @@ function abrirSeletorTurmaPdfResultados(turmaIds) {
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Esta prova foi aplicada em mais de uma turma. Escolha o que deve sair no PDF.</div>
     <div class="aluno-item" style="border-radius:var(--r-md);border:1px solid var(--border2);margin-bottom:6px;background:var(--surface)"
          onclick="closeModal();_gerarResultadosPDF('all')">
-      <div class="aluno-avatar">📋</div>
+      <div class="aluno-avatar">${ic('clipboard-list')}</div>
       <div class="aluno-info"><div class="aluno-name">Todas as turmas juntas</div></div>
     </div>
     ${opcoes}
@@ -8309,7 +8373,7 @@ function abrirSeletorTurmaPdfRelatorio(turmaIds) {
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Esta prova foi aplicada em mais de uma turma. Escolha o que deve sair no PDF.</div>
     <div class="aluno-item" style="border-radius:var(--r-md);border:1px solid var(--border2);margin-bottom:6px;background:var(--surface)"
          onclick="closeModal();_gerarRelatorioPDF('all')">
-      <div class="aluno-avatar">📈</div>
+      <div class="aluno-avatar">${ic('trending-up')}</div>
       <div class="aluno-info"><div class="aluno-name">Todas as turmas juntas</div></div>
     </div>
     ${opcoes}
@@ -8456,7 +8520,7 @@ async function _gerarRelatorioPDF(turmaFiltro){
         <tbody>
           ${ranking.map((r,i) => {
             const cls = r.nota>=7 ? 'aprov' : r.nota>=5 ? 'rec' : 'rep';
-            const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':('#'+(i+1));
+            const medal = i===0?ic('medal','gold'):i===1?ic('medal','silver'):i===2?ic('medal','bronze'):('#'+(i+1));
             return `<tr class="${cls}"><td class="num">${medal}</td><td class="aluno">${escapeHtml(r.nome)}</td>${mostrarTurmaRanking?`<td class="aluno">${escapeHtml(r.turmaNome||'—')}</td>`:''}<td class="num">${r.nota.toFixed(1)}</td></tr>`;
           }).join('')}
         </tbody>
