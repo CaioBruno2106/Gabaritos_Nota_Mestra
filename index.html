@@ -3,41 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#0D2137">
-<title>Correção Mestra</title>
+<meta name="theme-color" content="#002B5C">
+<title>Nota Mestra</title>
 <!-- build: v7 (Etapa 7 — Exportação JSON para Nota Mestra, formato de backup por turma, prova ou atividade) -->
 <!-- build anterior: v7a (Etapa A — Arquivar provas · Excluir correções · Nota por disciplina na conferência) -->
 
 <!-- Firebase Compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-
-<!-- ═══ Ícones (Lucide) — pack padronizado Nota Mestra ═══
-     Traço 2px, extremidades e junções arredondadas, estilo consistente
-     com o guia de ícones oficial (scanner, gabarito, correção, etc). ═══ -->
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-<script>
-/* Helper: gera a tag do ícone padrão. Uso: ${ic('check')} ou ${ic('medal','gold')} */
-function ic(name, cls) {
-  return '<i data-lucide="' + name + '"' + (cls ? ' class="ic-' + cls + '"' : '') + '></i>';
-}
-/* Redesenha os ícones sempre que o DOM muda (a app re-renderiza views inteiras via innerHTML) */
-(function () {
-  let pending = false;
-  function runCreateIcons() {
-    pending = false;
-    try { if (window.lucide) lucide.createIcons(); } catch (e) {}
-  }
-  function schedule() {
-    if (pending) return;
-    pending = true;
-    requestAnimationFrame(runCreateIcons);
-  }
-  document.addEventListener('DOMContentLoaded', schedule);
-  window.addEventListener('load', schedule);
-  new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
-  window._iconRefresh = schedule;
-})();
-</script>
 <script>
 /* ════════════════════════════════════════════════════════════════
    ETAPA 2 — CRUD Turmas, Alunos, Provas
@@ -151,7 +123,7 @@ async function renderTurmas() {
   if (!arr.length) {
     list.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">${ic('users')}</div>
+        <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
         <div class="empty-title">Nenhuma turma cadastrada</div>
         <div class="empty-sub">Crie a primeira turma para começar a vincular alunos e provas.</div>
         <button class="btn btn-cyan" onclick="openTurmaForm()">+ Nova turma</button>
@@ -260,7 +232,7 @@ function excluirTurma(id) {
     <div class="modal-title">Excluir turma?</div>
     <div style="font-size:14px;color:var(--text-muted);line-height:1.5;">
       <strong style="color:var(--text)">${escapeHtml(turma?.nome||'')}</strong> será removida.
-      ${nAlunos>0 ? `<br><br>${ic('alert-triangle')} Esta turma tem <strong>${nAlunos} aluno(s)</strong>. Eles continuarão cadastrados, mas ficarão sem turma.` : ''}
+      ${nAlunos>0 ? `<br><br><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Esta turma tem <strong>${nAlunos} aluno(s)</strong>. Eles continuarão cadastrados, mas ficarão sem turma.` : ''}
     </div>
     <button class="btn btn-danger" onclick="confirmaExcluirTurma('${id}')">Sim, excluir</button>
     <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
@@ -291,7 +263,7 @@ async function abrirTurma(id) {
     <div class="detail-header">
       <div class="back-btn" onclick="navTo('turmas')">‹</div>
       <div class="detail-title">${escapeHtml(t.nome)}</div>
-      <button class="icon-btn" onclick='openTurmaForm(${JSON.stringify(t).replace(/"/g,"&quot;")})' title="Editar">${ic('pencil')}</button>
+      <button class="icon-btn" onclick='openTurmaForm(${JSON.stringify(t).replace(/"/g,"&quot;")})' title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
     </div>
     <div class="info-grid">
       <div class="info-pill"><div class="info-pill-label">Turno</div><div class="info-pill-value">${escapeHtml(t.turno||'—')}</div></div>
@@ -305,13 +277,13 @@ async function abrirTurma(id) {
     </div>
     <div class="list-wrap" id="turma-alunos-list">
       ${ alunos.length === 0
-          ? `<div class="empty-state"><div class="empty-icon">${ic('user')}</div><div class="empty-title">Nenhum aluno</div><div class="empty-sub">Adicione alunos individualmente ou por lista colada.</div>
+          ? `<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="empty-title">Nenhum aluno</div><div class="empty-sub">Adicione alunos individualmente ou por lista colada.</div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
                 <button class="btn btn-cyan" onclick="openAlunoForm(null,'${id}')">+ Aluno</button>
-                <button class="btn btn-ghost" onclick="openImportAlunos('${id}')">${ic('clipboard-list')} Colar lista</button>
+                <button class="btn btn-ghost" onclick="openImportAlunos('${id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="6" y="4" width="12" height="18" rx="2"/></svg> Colar lista</button>
               </div></div>`
           : alunos.map(a => alunoRowHtml(a)).join('') + `
-              <button class="btn btn-ghost" style="margin-top:8px" onclick="openImportAlunos('${id}')">${ic('clipboard-list')} Importar lista</button>
+              <button class="btn btn-ghost" style="margin-top:8px" onclick="openImportAlunos('${id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="6" y="4" width="12" height="18" rx="2"/></svg> Importar lista</button>
             `
       }
     </div>
@@ -325,8 +297,8 @@ function alunoRowHtml(a) {
       <div class="aluno-name">${escapeHtml(a.nome)}</div>
       ${a.matricula ? `<span class="aluno-mat">${escapeHtml(a.matricula)}</span>` : ''}
       <div class="aluno-actions">
-        <button class="icon-btn" onclick='event.stopPropagation();openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'>${ic('pencil')}</button>
-        <button class="icon-btn danger" onclick="event.stopPropagation();excluirAluno('${a.id}')">${ic('trash-2')}</button>
+        <button class="icon-btn" onclick='event.stopPropagation();openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+        <button class="icon-btn danger" onclick="event.stopPropagation();excluirAluno('${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
       </div>
     </div>`;
 }
@@ -348,7 +320,7 @@ function alunos() {
     </div>
     <div class="search-bar">
       <input class="search-input" id="alunos-search" placeholder="Buscar aluno..." oninput="renderAlunos()">
-      <button class="btn-icon" style="background:var(--surface2);color:var(--text);box-shadow:none;border:1px solid var(--border)" onclick="openImportAlunos()">${ic('clipboard-list')}</button>
+      <button class="btn-icon" style="background:var(--surface2);color:var(--text);box-shadow:none;border:1px solid var(--border)" onclick="openImportAlunos()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="6" y="4" width="12" height="18" rx="2"/></svg></button>
     </div>
     <div class="filter-chips" id="alunos-chips"></div>
     <div id="alunos-list" class="list-wrap">
@@ -381,7 +353,7 @@ async function renderAlunos() {
   if (!arr.length) {
     listEl.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">${ic('user')}</div>
+        <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
         <div class="empty-title">Nenhum aluno</div>
         <div class="empty-sub">Cadastre alunos individualmente, importe uma lista colada, ou ajuste o filtro.</div>
         <button class="btn btn-cyan" onclick="openAlunoForm()">+ Novo aluno</button>
@@ -397,8 +369,8 @@ async function renderAlunos() {
       </div>
       ${a.matricula ? `<span class="aluno-mat">${escapeHtml(a.matricula)}</span>` : ''}
       <div class="aluno-actions">
-        <button class="icon-btn" onclick='event.stopPropagation();openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'>${ic('pencil')}</button>
-        <button class="icon-btn danger" onclick="event.stopPropagation();excluirAluno('${a.id}')">${ic('trash-2')}</button>
+        <button class="icon-btn" onclick='event.stopPropagation();openAlunoForm(${JSON.stringify(a).replace(/"/g,"&quot;")})'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+        <button class="icon-btn danger" onclick="event.stopPropagation();excluirAluno('${a.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
       </div>
     </div>`).join('');
 }
@@ -584,7 +556,7 @@ function provas() {
              style="flex:1" oninput="renderProvas()">
       <button class="btn-icon" id="btn-filtros-provas" style="background:var(--surface2);color:var(--text);box-shadow:none;border:1px solid var(--border);position:relative"
               onclick="toggleFiltrosProvas()">
-        ${ic('settings')}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         <span id="filtros-badge" style="display:none;position:absolute;top:-4px;right:-4px;width:10px;height:10px;background:var(--cyan);border-radius:50%"></span>
       </button>
     </div>
@@ -633,9 +605,9 @@ function provas() {
       </div>
       <div style="display:flex;gap:8px">
         <div class="chip ${_showArquivadas?'active':''}" onclick="toggleArquivadas()" style="cursor:pointer;font-size:12px">
-          ${ic('archive')} ${_showArquivadas ? 'Ocultar arquivadas' : 'Ver arquivadas'}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg> ${_showArquivadas ? 'Ocultar arquivadas' : 'Ver arquivadas'}
         </div>
-        <div class="chip" onclick="limparFiltrosProvas()" style="cursor:pointer;font-size:12px;color:var(--text-muted)">${ic('x')} Limpar filtros</div>
+        <div class="chip" onclick="limparFiltrosProvas()" style="cursor:pointer;font-size:12px;color:var(--text-muted)">✕ Limpar filtros</div>
       </div>
     </div>
 
@@ -721,7 +693,7 @@ async function renderProvas() {
   if (!arr.length) {
     list.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">${ic('clipboard-list')}</div>
+        <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="6" y="4" width="12" height="18" rx="2"/></svg></div>
         <div class="empty-title">Nenhuma prova encontrada</div>
         <div class="empty-sub">Ajuste os filtros ou crie uma nova prova.</div>
         <button class="btn btn-cyan" onclick="iniciarWizardProva()">+ Nova prova</button>
@@ -733,17 +705,17 @@ async function renderProvas() {
     const isEscola = p.escopo === 'escola';
     const isArquivada = !!p.arquivada;
     const badgeEscopo = isEscola
-      ? `<span class="badge badge-cyan" style="font-size:10px">${ic('school')} Escola</span>`
-      : `<span class="badge badge-blue" style="font-size:10px">${ic('lock')} Particular</span>`;
+      ? `<span class="badge badge-cyan" style="font-size:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/></svg> Escola</span>`
+      : `<span class="badge badge-blue" style="font-size:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Particular</span>`;
     const badgeArq = isArquivada
-      ? `<span class="badge" style="font-size:10px;background:rgba(122,154,191,0.15);color:var(--text-muted)">${ic('archive')} Arquivada</span>`
+      ? `<span class="badge" style="font-size:10px;background:rgba(122,154,191,0.15);color:var(--text-muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg> Arquivada</span>`
       : '';
     const bimLabel = p.bimestre ? `${p.bimestre}ª unid.` : '';
     const anoLabel = p.anoLetivo || '';
     const meta = [escapeHtml(p.disciplina||''), escapeHtml(turmaNome), bimLabel, anoLabel, `${p.numQuestoes||'?'} questões`].filter(Boolean).join(' · ');
     return `
       <div class="list-card" onclick="abrirProva('${p.id}')" style="${isArquivada?'opacity:0.65':''}">
-        <div class="list-card-icon ${isEscola ? 'cyan' : 'yellow'}">${ic('clipboard-list')}</div>
+        <div class="list-card-icon ${isEscola ? 'cyan' : 'yellow'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="6" y="4" width="12" height="18" rx="2"/></svg></div>
         <div class="list-card-body">
           <div class="list-card-title" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             ${escapeHtml(p.nome)} ${badgeEscopo} ${badgeArq}
@@ -833,8 +805,8 @@ function wizardStep1() {
       <div class="input-group">
         <label class="input-label">Tipo de avaliação</label>
         <div class="segmented" id="w-tipo-seg">
-          <div class="seg ${!multidisc?'active':''}" onclick="wizard.data.multidisciplinar=false;wizard.data.disciplinasConfig=[];renderWizard()">${ic('book-open')} Uma disciplina</div>
-          <div class="seg ${multidisc?'active':''}" onclick="wizard.data.multidisciplinar=true;renderWizard()">${ic('book-copy')} Multidisciplinar</div>
+          <div class="seg ${!multidisc?'active':''}" onclick="wizard.data.multidisciplinar=false;wizard.data.disciplinasConfig=[];renderWizard()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> Uma disciplina</div>
+          <div class="seg ${multidisc?'active':''}" onclick="wizard.data.multidisciplinar=true;renderWizard()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> Multidisciplinar</div>
         </div>
       </div>` : '' }
 
@@ -862,7 +834,7 @@ function wizardStep1() {
         </div>
         <button class="btn btn-ghost" style="margin-top:8px" onclick="adicionarDisciplinaConfig()">+ Adicionar disciplina</button>
         <div id="w-disc-aviso" style="font-size:12px;color:var(--yellow);margin-top:6px;display:${d.disciplinasConfig.length<2?'block':'none'}">
-          ${ic('alert-triangle')} Adicione pelo menos 2 disciplinas para uma avaliação multidisciplinar.
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Adicione pelo menos 2 disciplinas para uma avaliação multidisciplinar.
         </div>
       </div>
       ` }
@@ -876,9 +848,9 @@ function wizardStep1() {
           ${renderTurmasSelecionadas(d.turmaIds)}
         </div>
         <button class="btn btn-ghost" id="w-turmas-btn" style="font-size:12px;width:100%" onclick="abrirSeletorTurmasWizard()">
-          ${ d.turmaIds.length === 0 ? '+ Selecionar turmas' : `${ic('pencil')} Editar turmas selecionadas` }
+          ${ d.turmaIds.length === 0 ? '+ Selecionar turmas' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg> Editar turmas selecionadas' }
         </button>
-        ${turmas.length===0 ? `<div style="font-size:12px;color:var(--yellow);margin-top:4px">${ic('alert-triangle')} Crie uma turma primeiro</div>` : ''}
+        ${turmas.length===0 ? '<div style="font-size:12px;color:var(--yellow);margin-top:4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Crie uma turma primeiro</div>' : ''}
       </div>
       <div class="input-group">
         <label class="input-label">Unidade letiva</label>
@@ -896,11 +868,11 @@ function wizardStep1() {
       <div class="input-group">
         <label class="input-label">Visibilidade da prova</label>
         <div class="segmented" id="w-escopo-seg">
-          <div class="seg ${d.escopo==='proprio'?'active':''}" data-val="proprio" onclick="segPick(this);wizard.data.escopo=this.dataset.val">${ic('lock')} Só eu</div>
-          <div class="seg ${d.escopo==='escola'?'active':''}" data-val="escola" onclick="segPick(this);wizard.data.escopo=this.dataset.val">${ic('school')} Toda escola</div>
+          <div class="seg ${d.escopo==='proprio'?'active':''}" data-val="proprio" onclick="segPick(this);wizard.data.escopo=this.dataset.val"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Só eu</div>
+          <div class="seg ${d.escopo==='escola'?'active':''}" data-val="escola" onclick="segPick(this);wizard.data.escopo=this.dataset.val"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/></svg> Toda escola</div>
         </div>
         <div style="font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.5">
-          ${ d.escopo==='escola' ? `${ic('megaphone')} Todos os professores poderão ver e usar esta prova.` : `${ic('lock')} Só você verá esta prova — gestores não têm acesso.` }
+          ${ d.escopo==='escola' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg> Todos os professores poderão ver e usar esta prova.' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Só você verá esta prova — gestores não têm acesso.' }
         </div>
       </div>` : `
       <div class="input-group">
@@ -912,13 +884,13 @@ function wizardStep1() {
           ${ renderDestinatariosList(d.professoresDestinatarios) }
         </div>
         <button class="btn btn-ghost" style="font-size:12px" onclick="toggleTodosDestinatarios()">
-          ${ d.professoresDestinatarios.length === 0 ? `${ic('users')} Todos os professores (padrão)` : `${ic('pencil')} ${d.professoresDestinatarios.length} professor(es) selecionado(s)` }
+          ${ d.professoresDestinatarios.length === 0 ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Todos os professores (padrão)' : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg> ${d.professoresDestinatarios.length} professor(es) selecionado(s)` }
         </button>
       </div>` }
     </div>
     <div class="wizard-footer">
       <button class="btn btn-ghost" onclick="navTo('provas')">Cancelar</button>
-      <button class="btn btn-cyan" id="btn-w-next" onclick="wizardNext()" ${ w1Valid() ? '' : 'disabled' }>Próximo ${ic('arrow-right')}</button>
+      <button class="btn btn-cyan" id="btn-w-next" onclick="wizardNext()" ${ w1Valid() ? '' : 'disabled' }>Próximo →</button>
     </div>
   `;
 }
@@ -930,7 +902,7 @@ function renderTurmasSelecionadas(turmaIds) {
   }
   return `<div style="display:flex;flex-wrap:wrap;gap:4px">
     ${turmaIds.map(id => `<span class="badge badge-cyan" style="font-size:11px">${escapeHtml(turmaNomeById(id))}
-      <span style="cursor:pointer;margin-left:4px;opacity:.7" onclick="removerTurmaWizard('${id}')">${ic('x')}</span>
+      <span style="cursor:pointer;margin-left:4px;opacity:.7" onclick="removerTurmaWizard('${id}')">✕</span>
     </span>`).join('')}
   </div>`;
 }
@@ -939,7 +911,7 @@ function atualizarTurmasWizardUI() {
   const el = document.getElementById('w-turmas-list');
   if (el) el.innerHTML = renderTurmasSelecionadas(wizard.data.turmaIds);
   const btn = document.getElementById('w-turmas-btn');
-  if (btn) btn.textContent = wizard.data.turmaIds.length === 0 ? '+ Selecionar turmas' : `${ic('pencil')} Editar turmas selecionadas`;
+  if (btn) btn.textContent = wizard.data.turmaIds.length === 0 ? '+ Selecionar turmas' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg> Editar turmas selecionadas';
   w1Check();
   // Reflete a mudança no bloco multidisciplinar (label "nas turmas selecionadas")
   const discEl = document.getElementById('w-discs-list');
@@ -994,7 +966,7 @@ function renderDisciplinasConfig(lista, turmaIds) {
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-md);padding:12px;margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <span style="font-size:12px;font-weight:700;color:var(--cyan)">Disciplina ${i+1}</span>
-        <button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:0 4px" onclick="removerDisciplinaConfig(${i})">${ic('x')}</button>
+        <button style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:0 4px" onclick="removerDisciplinaConfig(${i})">✕</button>
       </div>
       <div class="input-group" style="margin-bottom:8px">
         <label class="input-label" style="font-size:10px">Nome da disciplina</label>
@@ -1047,8 +1019,8 @@ function renderDestinatariosList(selecionados) {
   // Modo "todos" (lista vazia = todos)
   if (nSel === 0) {
     return `<div style="font-size:12px;color:var(--text-muted);padding:6px 0">
-      ${ic('users')} Todos os professores da escola poderão ver esta prova.
-      <button class="btn btn-ghost" style="margin-top:6px;font-size:12px;width:100%" onclick="abrirSeletorDestinatarios()">Restringir para professores específicos ${ic('arrow-right')}</button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Todos os professores da escola poderão ver esta prova.
+      <button class="btn btn-ghost" style="margin-top:6px;font-size:12px;width:100%" onclick="abrirSeletorDestinatarios()">Restringir para professores específicos →</button>
     </div>`;
   }
   const nomes = selecionados.map(uid => {
@@ -1058,7 +1030,7 @@ function renderDestinatariosList(selecionados) {
   return `<div style="font-size:12px;color:var(--text-muted);padding:4px 0">
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
       ${nomes.map((n,i) => `<span class="badge badge-cyan" style="font-size:11px">${n}
-        <span style="cursor:pointer;margin-left:4px;opacity:.7" onclick="removerDestinatario('${selecionados[i]}')">${ic('x')}</span>
+        <span style="cursor:pointer;margin-left:4px;opacity:.7" onclick="removerDestinatario('${selecionados[i]}')">✕</span>
       </span>`).join('')}
     </div>
     <div style="display:flex;gap:8px">
@@ -1183,16 +1155,16 @@ function wizardStep2() {
           3 = A, B, C · 4 = A–D · 5 = A–E
         </div>
       </div>
-      <div class="card" style="background:rgba(0,180,216,0.06);border-color:rgba(0,180,216,0.2)">
+      <div class="card" style="background:rgba(0,168,232,0.06);border-color:rgba(0,168,232,0.2)">
         <div style="font-size:13px;color:var(--text-muted);line-height:1.6">
-          ${ic('lightbulb')} No próximo passo você marca a alternativa correta de cada questão.
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.9V17h8v-2.1A7 7 0 0 0 12 2z"/></svg> No próximo passo você marca a alternativa correta de cada questão.
           Você pode mudar tudo depois.
         </div>
       </div>
     </div>
     <div class="wizard-footer">
-      <button class="btn btn-ghost" onclick="wizardBack()">${ic('arrow-left')} Voltar</button>
-      <button class="btn btn-cyan" onclick="wizardGoStep3()">Próximo ${ic('arrow-right')}</button>
+      <button class="btn btn-ghost" onclick="wizardBack()">← Voltar</button>
+      <button class="btn btn-cyan" onclick="wizardGoStep3()">Próximo →</button>
     </div>
   `;
 }
@@ -1230,8 +1202,8 @@ function wizardStep3() {
       <div class="gab-list">${rows}</div>
     </div>
     <div class="wizard-footer">
-      <button class="btn btn-ghost" onclick="wizardBack()">${ic('arrow-left')} Voltar</button>
-      <button class="btn btn-cyan" onclick="wizardGoStep4()" ${ marcadas<total ? 'disabled' : '' }>Próximo ${ic('arrow-right')}</button>
+      <button class="btn btn-ghost" onclick="wizardBack()">← Voltar</button>
+      <button class="btn btn-cyan" onclick="wizardGoStep4()" ${ marcadas<total ? 'disabled' : '' }>Próximo →</button>
     </div>
   `;
 }
@@ -1280,7 +1252,7 @@ function wizardStep4() {
     const anul = !!d.anuladas[q];
     rows += `<div class="peso-row ${anul?'anulada':''}">
       <div class="peso-q">${q}.</div>
-      <div class="peso-correct">${anul ? `${ic('ban')}` : d.gabarito[q]||'?'}</div>
+      <div class="peso-correct">${anul ? '⊘' : d.gabarito[q]||'?'}</div>
       <input class="peso-input" type="number" step="0.5" min="0" max="10"
              value="${d.pesos[q]??1}" ${anul?'disabled':''}
              oninput="wizard.data.pesos[${q}]=parseFloat(this.value)||0; w4Resume()">
@@ -1302,7 +1274,7 @@ function wizardStep4() {
       ${rows}
     </div>
     <div class="wizard-footer">
-      <button class="btn btn-ghost" onclick="wizardBack()">${ic('arrow-left')} Voltar</button>
+      <button class="btn btn-ghost" onclick="wizardBack()">← Voltar</button>
       <button class="btn btn-cyan" id="btn-w-save" onclick="salvarProva()">${wizard.editId?'Salvar':'Criar prova'}</button>
     </div>
   `;
@@ -1379,7 +1351,7 @@ async function abrirProva(id) {
       <div class="back-btn" onclick="navTo('provas')">‹</div>
       <div class="detail-title">${escapeHtml(p.nome)}</div>
       ${ (p.criadoPor === app.user?.uid || isGestor())
-        ? `<button class="icon-btn" onclick="editarProva('${p.id}')" title="Editar">${ic('pencil')}</button>`
+        ? `<button class="icon-btn" onclick="editarProva('${p.id}')" title="Editar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>`
         : '' }
     </div>
     <div style="padding:0 16px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
@@ -1387,13 +1359,13 @@ async function abrirProva(id) {
       <span class="badge badge-blue">${escapeHtml(turmaNome)}</span>
       <span class="badge badge-yellow">${escapeHtml(p.bimestre||'1')}ª unidade</span>
       ${ p.escopo === 'escola'
-        ? `<span class="badge badge-cyan" style="background:rgba(0,180,216,0.15)">${ic('school')} Escola</span>`
-        : `<span class="badge badge-blue" style="background:rgba(26,86,160,0.15)">${ic('lock')} Particular</span>` }
+        ? '<span class="badge badge-cyan" style="background:rgba(0,168,232,0.15)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/></svg> Escola</span>'
+        : '<span class="badge badge-blue" style="background:rgba(0,86,179,0.15)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Particular</span>' }
       ${ p.arquivada
-        ? `<span class="badge" style="background:rgba(122,154,191,0.15);color:var(--text-muted)">${ic('archive')} Arquivada</span>`
+        ? '<span class="badge" style="background:rgba(122,154,191,0.15);color:var(--text-muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg> Arquivada</span>'
         : '' }
       ${ isGestor() && Array.isArray(p.professoresDestinatarios) && p.professoresDestinatarios.length > 0
-        ? `<span class="badge badge-yellow" title="Prova restrita a professores específicos">${ic('user')} ${p.professoresDestinatarios.length} professor(es)</span>`
+        ? `<span class="badge badge-yellow" title="Prova restrita a professores específicos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> ${p.professoresDestinatarios.length} professor(es)</span>`
         : '' }
     </div>
     <div class="info-grid">
@@ -1405,7 +1377,7 @@ async function abrirProva(id) {
 
     <div class="dash-quick-actions" style="padding:0 16px 16px">
       <div class="quick-action" onclick="gerarCartao('${p.id}')">
-        <div class="quick-action-icon yellow">${ic('file-text')}</div>
+        <div class="quick-action-icon yellow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
         <div class="quick-action-text">
           <div class="quick-action-title">Gerar cartão-resposta</div>
           <div class="quick-action-sub">PDF imprimível com QR Code</div>
@@ -1413,7 +1385,7 @@ async function abrirProva(id) {
         <div class="quick-action-arrow">›</div>
       </div>
       <div class="quick-action" onclick="iniciarCorrecao('${p.id}')">
-        <div class="quick-action-icon green">${ic('camera')}</div>
+        <div class="quick-action-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
         <div class="quick-action-text">
           <div class="quick-action-title">Corrigir prova</div>
           <div class="quick-action-sub">Fotografar cartão preenchido</div>
@@ -1421,7 +1393,7 @@ async function abrirProva(id) {
         <div class="quick-action-arrow">›</div>
       </div>
       <div class="quick-action" onclick="abrirResultadosProva('${p.id}')">
-        <div class="quick-action-icon blue">${ic('bar-chart-3')}</div>
+        <div class="quick-action-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
         <div class="quick-action-text">
           <div class="quick-action-title">Ver resultados</div>
           <div class="quick-action-sub">Notas e correções dos alunos</div>
@@ -1429,7 +1401,7 @@ async function abrirProva(id) {
         <div class="quick-action-arrow">›</div>
       </div>
       <div class="quick-action" onclick="abrirRelatorio('${p.id}')">
-        <div class="quick-action-icon" style="background:rgba(138,43,226,0.18)">${ic('trending-up')}</div>
+        <div class="quick-action-icon" style="background:rgba(138,43,226,0.18)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
         <div class="quick-action-text">
           <div class="quick-action-title">Relatório pedagógico</div>
           <div class="quick-action-sub">Análise por questão, ranking e distribuição</div>
@@ -1463,7 +1435,7 @@ async function abrirProva(id) {
     ${ (p.criadoPor === app.user?.uid || isGestor()) ? `
     <div style="padding:0 16px 24px;display:flex;flex-direction:column;gap:8px">
       <button class="btn btn-ghost" onclick="toggleArquivarProva('${p.id}', ${!!p.arquivada})">
-        ${ p.arquivada ? `${ic('folder-open')} Desarquivar prova` : `${ic('archive')} Arquivar prova` }
+        ${ p.arquivada ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v1"/><path d="M2 10h20l-2.4 8.4a2 2 0 0 1-1.92 1.6H6.32a2 2 0 0 1-1.92-1.6L2 10z"/></svg> Desarquivar prova' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg> Arquivar prova' }
       </button>
       <button class="btn btn-danger" onclick="excluirProva('${p.id}')">Excluir prova</button>
     </div>` : '' }
@@ -1533,7 +1505,7 @@ async function toggleArquivarProva(id, atualmenteArquivada) {
         : 'A prova voltará a aparecer normalmente na listagem.' }
     </div>
     <button class="btn btn-cyan" id="btn-arq-confirm" onclick="confirmaArquivarProva('${id}', ${novoEstado})">
-      ${ novoEstado ? `${ic('archive')} Arquivar` : `${ic('folder-open')} Desarquivar` }
+      ${ novoEstado ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg> Arquivar' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v1"/><path d="M2 10h20l-2.4 8.4a2 2 0 0 1-1.92 1.6H6.32a2 2 0 0 1-1.92-1.6L2 10z"/></svg> Desarquivar' }
     </button>
     <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
   `);
@@ -1550,8 +1522,12 @@ async function confirmaArquivarProva(id, arquivar) {
   } catch (e) { toast('Erro: '+e.message, 'error'); }
 }
 
-/* Limpeza de cache ao trocar de escola/sair é feita dentro de signOut(),
-   mais abaixo — ver comentário "cache local" na função signOut(). */
+/* Limpa o cache ao trocar de escola (sign out) */
+const _origSignOut = signOut;
+signOut = async function() {
+  cache.turmas = cache.alunos = cache.provas = null;
+  return _origSignOut();
+};
 
 </script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -1567,93 +1543,76 @@ async function confirmaArquivarProva(id, arquivar) {
 
 <style>
 /* ═══════════════════════════════════════════════
-   ÍCONES — Pack padronizado Nota Mestra (Lucide)
-   Traço 2px, arredondado, cor = currentColor
-═══════════════════════════════════════════════ */
-[data-lucide] { display: inline-flex; }
-[data-lucide] svg,
-svg.lucide {
-  width: 1em; height: 1em;
-  stroke-width: 2px;
-  stroke: currentColor;
-  vertical-align: -0.15em;
-  flex-shrink: 0;
-}
-.ic-gold   svg { color: #F5A623; }
-.ic-silver svg { color: #C3CBD4; }
-.ic-bronze svg { color: #C77E43; }
-
-/* Cor dos ícones nos contêineres que hoje não definem cor própria */
-.empty-icon svg        { color: var(--text-dim); }
-.dash-escola-icon svg   { color: var(--cyan); }
-.escola-option-icon.create svg { color: var(--cyan); }
-.escola-option-icon.join   svg { color: #6BAEFF; }
-.quick-action-icon svg { color: var(--text); }
-.quick-action-icon.green  svg { color: #00C882; }
-.quick-action-icon.yellow svg { color: var(--yellow); }
-.quick-action-icon.blue   svg { color: #6BAEFF; }
-.mais-item-icon svg    { color: var(--text); }
-.mais-item-icon[style*="230,57,70"] svg  { color: #FF6B6B; }
-.mais-item-icon[style*="245,166,35"] svg { color: var(--yellow); }
-.mais-item-icon[style*="26,86,160"] svg  { color: #6BAEFF; }
-.mais-item-icon[style*="0,180,216"] svg  { color: var(--cyan); }
-.quick-action-icon[style*="138,43,226"] svg { color: #B69BFF; }
-
-/* ═══════════════════════════════════════════════
    DESIGN SYSTEM — Paleta PE
 ═══════════════════════════════════════════════ */
 :root {
-  /* Cores base */
-  --navy:    #0D2137;
-  --navy2:   #162840;
-  --navy3:   #1E3A5F;
-  --blue:    #1A56A0;
-  --blue2:   #2368C4;
-  --cyan:    #00B4D8;
-  --cyan2:   #00D4FF;
-  --yellow:  #F5A623;
-  --red:     #E63946;
+  /* Cores base — paleta oficial Governo de Pernambuco (igual ao Nota Mestra) */
+  --navy:    #002b5c;
+  --navy2:   #003d73;
+  --navy3:   #0056b3;
+  --blue:    #0056b3;
+  --blue2:   #1669c9;
+  --cyan:    #00a8e8;
+  --cyan2:   #33bdf0;
+  --yellow:  #fdb913;
+  --red:     #e31b23;
+  --green:   #28a745;
 
-  /* Texto */
-  --text:       #E8F0FE;
-  --text-muted: #7A9ABF;
-  --text-dim:   #4A6A8A;
+  /* Texto (modo claro por padrão) */
+  --text:       #212529;
+  --text-muted: #6c757d;
+  --text-dim:   #9aa4ad;
 
-  /* Superfícies */
-  --surface:    #162840;
-  --surface2:   #1E3A5F;
-  --surface3:   #243F6A;
-  --border:     #254570;
-  --border2:    #1A3355;
+  /* Superfícies (modo claro por padrão) */
+  --bg:         #f4f6f9;
+  --surface:    #ffffff;
+  --surface2:   #f4f6f9;
+  --surface3:   #eef1f5;
+  --border:     #dee2e6;
+  --border2:    #dee2e6;
 
   /* Tipografia */
-  --font: 'Inter', system-ui, sans-serif;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
   --mono: 'JetBrains Mono', monospace;
 
   /* Raios */
-  --r-sm: 8px;
-  --r-md: 12px;
+  --r-sm: 6px;
+  --r-md: 10px;
   --r-lg: 16px;
   --r-xl: 20px;
   --r-full: 9999px;
 
   /* Sombras */
-  --shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 20px rgba(0,0,0,0.4);
-  --shadow-lg: 0 8px 40px rgba(0,0,0,0.5);
-  --glow-cyan: 0 0 20px rgba(0,180,216,0.3);
-  --glow-blue: 0 0 20px rgba(26,86,160,0.4);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.06);
+  --shadow-md: 0 8px 28px rgba(0,0,0,.14);
+  --shadow-lg: 0 20px 60px rgba(0,0,0,.22);
+  --glow-cyan: 0 0 0 rgba(0,0,0,0);
+  --glow-blue: 0 0 0 rgba(0,0,0,0);
 
   /* Bottom nav height */
   --nav-h: 64px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* ── MODO ESCURO ── */
+body.dark-mode {
+  --text:       #e8e8e8;
+  --text-muted: #9e9e9e;
+  --text-dim:   #6c757d;
+
+  --bg:         #121212;
+  --surface:    #1e1e1e;
+  --surface2:   #171717;
+  --surface3:   #2a2a2a;
+  --border:     #333333;
+  --border2:    #333333;
+}
+
 /* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
   height: 100%;
-  background: var(--navy);
+  background: var(--bg);
   color: var(--text);
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
@@ -1710,10 +1669,10 @@ html, body {
 }
 .btn-ghost:hover { background: var(--surface2); color: var(--text); }
 .btn-danger {
-  background: rgba(230,57,70,0.15); color: var(--red);
-  border: 1.5px solid rgba(230,57,70,0.3);
+  background: rgba(227,27,35,0.15); color: var(--red);
+  border: 1.5px solid rgba(227,27,35,0.3);
 }
-.btn-danger:hover { background: rgba(230,57,70,0.25); }
+.btn-danger:hover { background: rgba(227,27,35,0.25); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
 
 /* Google button */
@@ -1740,7 +1699,7 @@ html, body {
   transition: border-color 0.2s, box-shadow 0.2s;
   width: 100%; outline: none;
 }
-.input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,180,216,0.15); }
+.input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(0,168,232,0.15); }
 .input::placeholder { color: var(--text-dim); }
 .input-code {
   font-family: var(--mono); font-size: 22px; font-weight: 700;
@@ -1760,17 +1719,17 @@ html, body {
   padding: 3px 10px; border-radius: var(--r-full);
   font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
 }
-.badge-cyan { background: rgba(0,180,216,0.15); color: var(--cyan); }
-.badge-yellow { background: rgba(245,166,35,0.15); color: var(--yellow); }
-.badge-blue  { background: rgba(26,86,160,0.25); color: #6BAEFF; }
+.badge-cyan { background: rgba(0,168,232,0.15); color: var(--cyan); }
+.badge-yellow { background: rgba(253,185,19,0.15); color: var(--yellow); }
+.badge-blue  { background: rgba(0,86,179,0.15); color: var(--blue); }
 
 /* Mensagens inline em modais (usado na integração com o Nota Mestra) */
 .nm-msg {
   padding: 10px 12px; border-radius: var(--r-md);
   font-size: 12px; line-height: 1.5;
 }
-.nm-msg.success { background: rgba(0,180,216,0.12); border: 1px solid rgba(0,180,216,0.3); color: var(--cyan2); }
-.nm-msg.error   { background: rgba(230,57,70,0.1);  border: 1px solid rgba(230,57,70,0.3);  color: #FF8A8A; }
+.nm-msg.success { background: rgba(0,168,232,0.12); border: 1px solid rgba(0,168,232,0.3); color: var(--cyan2); }
+.nm-msg.error   { background: rgba(227,27,35,0.1);  border: 1px solid rgba(227,27,35,0.3);  color: #FF8A8A; }
 .nm-msg.info    { background: rgba(122,154,191,0.1); border: 1px solid var(--border);        color: var(--text-muted); }
 
 /* Divider */
@@ -1796,8 +1755,8 @@ html, body {
   box-shadow: var(--shadow-md);
   animation: toast-in 0.25s ease; width: 100%; text-align: center;
 }
-.toast.error { border-color: rgba(230,57,70,0.5); color: #FF8A8A; }
-.toast.success { border-color: rgba(0,180,216,0.4); color: var(--cyan); }
+.toast.error { border-color: rgba(227,27,35,0.5); color: #FF8A8A; }
+.toast.success { border-color: rgba(0,168,232,0.4); color: var(--cyan); }
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -1833,7 +1792,7 @@ html, body {
 ═══════════════════════════════════════════════ */
 #screen-splash {
   position: fixed; inset: 0;
-  background: #0D2137;
+  background: #002B5C;
   display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 28px;
   z-index: 100;
 }
@@ -1895,7 +1854,7 @@ html, body {
 }
 .nm-dot {
   border-radius: 50%;
-  background: #1A56A0;
+  background: #0056B3;
   opacity: 0;
   transform: scale(0);
 }
@@ -1905,7 +1864,7 @@ html, body {
   position: absolute;
   top: 8px; right: 16px;
   font-size: 20px; font-weight: 900;
-  color: #1A56A0;
+  color: #0056B3;
   opacity: 0;
   animation: nm-plus-in 0.3s cubic-bezier(0.34,1.56,0.64,1) 1.55s forwards;
 }
@@ -1929,7 +1888,7 @@ html, body {
 }
 .nm-word-mestra {
   font-size: 28px; font-weight: 900; letter-spacing: -0.02em;
-  color: #00B4D8;
+  color: #00A8E8;
 }
 
 /* Subtítulo */
@@ -1943,7 +1902,7 @@ html, body {
 /* Spinner de carregamento */
 .nm-spinner {
   width: 22px; height: 22px;
-  border: 2px solid rgba(0,180,216,0.18);
+  border: 2px solid rgba(0,168,232,0.18);
   border-top-color: var(--cyan);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -1955,7 +1914,7 @@ html, body {
 /* Splash spinner (alias) */
 .splash-spinner {
   width: 22px; height: 22px;
-  border: 2px solid rgba(0,180,216,0.18);
+  border: 2px solid rgba(0,168,232,0.18);
   border-top-color: var(--cyan);
   border-radius: 50%; animation: spin 0.8s linear infinite;
 }
@@ -1967,7 +1926,7 @@ html, body {
   position: fixed; inset: 0;
   display: flex; flex-direction: column;
   overflow-y: auto;
-  background: var(--navy);
+  background: var(--bg);
 }
 
 .login-hero {
@@ -1999,7 +1958,7 @@ html, body {
 .hero-scan-line {
   position: absolute; left: 0; right: 0; height: 2px;
   background: linear-gradient(90deg, transparent 5%, var(--cyan) 30%, var(--cyan2) 50%, var(--cyan) 70%, transparent 95%);
-  box-shadow: 0 0 12px 2px rgba(0,180,216,0.6);
+  box-shadow: 0 0 12px 2px rgba(0,168,232,0.6);
   animation: hero-scan 3.5s ease-in-out infinite;
   pointer-events: none;
 }
@@ -2019,7 +1978,7 @@ html, body {
   width: 80px; height: 80px; border-radius: 22px;
   background: linear-gradient(135deg, var(--blue) 0%, var(--cyan) 100%);
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 40px rgba(0,180,216,0.4), var(--shadow-lg);
+  box-shadow: 0 0 40px rgba(0,168,232,0.4), var(--shadow-lg);
   position: relative; overflow: hidden;
 }
 .login-hero-icon svg { width: 44px; height: 44px; }
@@ -2057,7 +2016,7 @@ html, body {
 #screen-onboarding {
   position: fixed; inset: 0;
   display: flex; flex-direction: column;
-  background: var(--navy); overflow-y: auto;
+  background: var(--bg); overflow-y: auto;
 }
 
 .onboarding-header {
@@ -2096,16 +2055,16 @@ html, body {
 .escola-option:active { transform: scale(0.98); }
 .escola-option.selected {
   border-color: var(--cyan);
-  background: rgba(0,180,216,0.07);
-  box-shadow: 0 0 0 1px rgba(0,180,216,0.2);
+  background: rgba(0,168,232,0.07);
+  box-shadow: 0 0 0 1px rgba(0,168,232,0.2);
 }
 .escola-option-icon {
   width: 44px; height: 44px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0; font-size: 20px;
 }
-.escola-option-icon.create { background: rgba(0,180,216,0.15); }
-.escola-option-icon.join   { background: rgba(26,86,160,0.2); }
+.escola-option-icon.create { background: rgba(0,168,232,0.15); }
+.escola-option-icon.join   { background: rgba(0,86,179,0.2); }
 .escola-option-info { flex: 1; }
 .escola-option-title { font-size: 15px; font-weight: 700; color: var(--text); }
 .escola-option-sub   { font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
@@ -2123,7 +2082,7 @@ html, body {
 
 /* Código gerado */
 .code-display {
-  background: var(--navy); border: 2px solid var(--border);
+  background: var(--bg); border: 2px solid var(--border);
   border-radius: var(--r-lg); padding: 20px;
   text-align: center; position: relative;
 }
@@ -2153,40 +2112,57 @@ html, body {
 #screen-app {
   position: fixed; inset: 0;
   display: flex; flex-direction: column;
-  background: var(--navy);
+  background: var(--bg);
 }
 
-/* Top bar */
+/* Top bar (mesmo tratamento visual do navbar do Nota Mestra: sempre navy, texto claro fixo) */
 .topbar {
   height: 56px; flex-shrink: 0;
   padding: 0 20px;
+  position: relative;
   display: flex; align-items: center; justify-content: space-between;
-  background: var(--navy); border-bottom: 1px solid var(--border2);
+  background: var(--navy); box-shadow: 0 4px 14px rgba(0,0,0,.15);
   padding-top: env(safe-area-inset-top, 0);
 }
 .topbar-left { display: flex; align-items: center; gap: 10px; }
 .topbar-logo-icon {
   width: 32px; height: 32px; border-radius: 9px;
-  background: #EEF2FA;
+  background: transparent; overflow: hidden;
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  overflow: hidden;
 }
 .topbar-logo-icon svg { width: 26px; height: 26px; }
 .topbar-title {
-  font-size: 16px; font-weight: 800; letter-spacing: -0.01em; color: var(--text);
+  font-size: 16px; font-weight: 800; letter-spacing: -0.01em; color: #fff;
 }
 .topbar-escola {
-  font-size: 11px; color: var(--text-muted); font-weight: 500; line-height: 1;
+  font-size: 11px; color: var(--cyan); font-weight: 500; line-height: 1;
 }
 .topbar-right { display: flex; align-items: center; gap: 8px; }
+.topbar-iconbtn {
+  background: rgba(255,255,255,.12); border: none; border-radius: 20px;
+  padding: 7px 9px; cursor: pointer; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .2s; flex-shrink: 0;
+}
+.topbar-iconbtn:hover { background: rgba(255,255,255,.22); }
+.topbar-iconbtn svg { width: 18px; height: 18px; }
 .topbar-avatar {
   width: 34px; height: 34px; border-radius: 50%;
-  background: var(--surface2); border: 2px solid var(--border);
+  background: var(--cyan); border: none;
   overflow: hidden; display: flex; align-items: center; justify-content: center;
-  font-size: 14px; font-weight: 700; color: var(--cyan); cursor: pointer;
+  font-size: 14px; font-weight: 900; color: var(--navy); cursor: pointer;
   flex-shrink: 0;
 }
 .topbar-avatar img { width: 100%; height: 100%; object-fit: cover; }
+/* Faixa de cores — assinatura visual compartilhada com o Nota Mestra */
+.topbar-brand-line {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 4px;
+  display: flex; pointer-events: none;
+}
+.topbar-brand-line span { flex: 1; }
+.topbar-brand-line .bl-yellow { background: var(--yellow); }
+.topbar-brand-line .bl-red    { background: var(--red); }
+.topbar-brand-line .bl-cyan   { background: var(--cyan); }
 
 /* Conteúdo scrollável */
 .app-content {
@@ -2242,14 +2218,14 @@ html, body {
 
 .dash-escola-card {
   margin: 0 16px 16px;
-  background: linear-gradient(135deg, rgba(26,86,160,0.4) 0%, rgba(0,180,216,0.2) 100%);
-  border: 1px solid rgba(0,180,216,0.25);
+  background: linear-gradient(135deg, rgba(0,86,179,0.4) 0%, rgba(0,168,232,0.2) 100%);
+  border: 1px solid rgba(0,168,232,0.25);
   border-radius: var(--r-lg); padding: 16px 18px;
   display: flex; align-items: center; gap: 14px;
 }
 .dash-escola-icon {
   width: 44px; height: 44px; border-radius: 12px;
-  background: rgba(0,180,216,0.2); display: flex; align-items: center; justify-content: center;
+  background: rgba(0,168,232,0.2); display: flex; align-items: center; justify-content: center;
   font-size: 22px; flex-shrink: 0;
 }
 .dash-escola-info { flex: 1; min-width: 0; }
@@ -2304,8 +2280,8 @@ html, body {
   font-size: 20px;
 }
 .quick-action-icon.green  { background: rgba(0,200,130,0.15); }
-.quick-action-icon.yellow { background: rgba(245,166,35,0.15); }
-.quick-action-icon.blue   { background: rgba(26,86,160,0.2); }
+.quick-action-icon.yellow { background: rgba(253,185,19,0.15); }
+.quick-action-icon.blue   { background: rgba(0,86,179,0.2); }
 .quick-action-text { flex: 1; }
 .quick-action-title { font-size: 14px; font-weight: 700; color: var(--text); }
 .quick-action-sub   { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
@@ -2464,7 +2440,7 @@ html, body {
   transition: all .15s;
 }
 .chip.active {
-  background: rgba(0,180,216,0.15); border-color: var(--cyan); color: var(--cyan);
+  background: rgba(0,168,232,0.15); border-color: var(--cyan); color: var(--cyan);
 }
 
 /* Lista de cards (turmas / alunos / provas) */
@@ -2482,9 +2458,9 @@ html, body {
   display: flex; align-items: center; justify-content: center;
   font-size: 18px; font-weight: 700;
 }
-.list-card-icon.blue   { background: rgba(26,86,160,0.25);  color: #6BAEFF; }
-.list-card-icon.cyan   { background: rgba(0,180,216,0.18);  color: var(--cyan); }
-.list-card-icon.yellow { background: rgba(245,166,35,0.18); color: var(--yellow); }
+.list-card-icon.blue   { background: rgba(0,86,179,0.25);  color: #6BAEFF; }
+.list-card-icon.cyan   { background: rgba(0,168,232,0.18);  color: var(--cyan); }
+.list-card-icon.yellow { background: rgba(253,185,19,0.18); color: var(--yellow); }
 .list-card-icon.purple { background: rgba(140,100,220,0.20); color: #B69BFF; }
 .list-card-body { flex: 1; min-width: 0; }
 .list-card-title {
@@ -2649,14 +2625,14 @@ html, body {
   border: 1px solid var(--border2); border-radius: var(--r-md);
 }
 .peso-row.anulada {
-  background: rgba(245,166,35,0.07); border-color: rgba(245,166,35,0.3);
+  background: rgba(253,185,19,0.07); border-color: rgba(253,185,19,0.3);
 }
 .peso-q { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--text); width: 32px; }
 .peso-correct {
   font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--cyan);
-  background: rgba(0,180,216,0.1); border-radius: 6px; padding: 2px 8px; min-width: 28px; text-align: center;
+  background: rgba(0,168,232,0.1); border-radius: 6px; padding: 2px 8px; min-width: 28px; text-align: center;
 }
-.peso-row.anulada .peso-correct { color: var(--yellow); background: rgba(245,166,35,0.12); }
+.peso-row.anulada .peso-correct { color: var(--yellow); background: rgba(253,185,19,0.12); }
 .peso-input {
   width: 64px; padding: 7px 8px; text-align: center;
   background: var(--surface2); border: 1.5px solid var(--border);
@@ -2727,117 +2703,7 @@ html, body {
 .icon-btn:active { background: var(--surface2); }
 .icon-btn.danger:active { color: var(--red); }
 
-/* ═══════════════════════════════════════════════
-   LAYOUT DESKTOP — telas ≥860px
-   O app inteiro é construído "mobile-first" (bottom
-   nav, modais em bottom-sheet, listas em coluna
-   única). Este bloco reorganiza esses mesmos
-   elementos para telas grandes, para que o app pareça
-   pensado para PC também — e não apenas esticado.
-═══════════════════════════════════════════════ */
-@media (min-width: 860px) {
-
-  /* ── Login: cartão centralizado sobre o hero cheio ── */
-  .login-card {
-    max-width: 440px;
-    width: 100%;
-    margin: 0 auto;
-    border-radius: 24px;
-    border: 1px solid var(--border2);
-    box-shadow: var(--shadow-lg);
-  }
-  .login-hero { padding-top: 64px; }
-
-  /* ── Onboarding: passos centralizados ── */
-  .onboarding-header,
-  .onboarding-body,
-  .onboarding-footer {
-    max-width: 540px;
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  /* ── Estrutura do app: barra de abas sobe para o topo ── */
-  .topbar { padding: 0 32px; order: 0; }
-
-  .bottom-nav {
-    position: static;
-    order: 1;
-    height: auto;
-    padding: 0 28px;
-    justify-content: flex-start;
-    gap: 4px;
-    box-shadow: none;
-    border-top: none;
-    border-bottom: 1px solid var(--border2);
-  }
-  .nav-item {
-    flex: 0 0 auto;
-    flex-direction: row;
-    height: 50px;
-    padding: 0 16px;
-    gap: 8px;
-  }
-  .nav-item svg { width: 18px; height: 18px; }
-  .nav-item span { font-size: 13px; }
-  .nav-item:hover { background: var(--surface2); }
-  .nav-item.active::after {
-    top: auto; bottom: 0; left: 16px; right: 16px;
-    width: auto; transform: none;
-    border-radius: 3px 3px 0 0;
-  }
-
-  .app-content {
-    order: 2;
-    max-width: 1180px;
-    margin: 0 auto;
-    width: 100%;
-    padding-top: 24px;
-    padding-bottom: 40px;
-  }
-
-  /* ── Cartões e listas em grade, como no Nota Mestra ── */
-  .dash-stats {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 14px;
-  }
-  .dash-quick-actions {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 12px;
-  }
-  .list-wrap {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    align-items: start;
-    gap: 12px;
-  }
-  .info-grid { grid-template-columns: repeat(4, 1fr); }
-  .rel-resumo-grid { grid-template-columns: repeat(4, 1fr); }
-
-  /* ── Modais centralizados, não em bottom-sheet ── */
-  .modal-overlay {
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-  }
-  .modal {
-    width: 100%;
-    max-width: 540px;
-    max-height: 85vh;
-    border-radius: 20px;
-    animation: modal-pop .22s cubic-bezier(0.34,1.56,0.64,1);
-  }
-  .modal-handle { display: none; }
-  @keyframes modal-pop {
-    from { opacity: 0; transform: scale(.96) translateY(8px); }
-    to   { opacity: 1; transform: scale(1) translateY(0); }
-  }
-}
-
 </style>
-
 </head>
 <body>
 
@@ -2912,8 +2778,8 @@ function showScreenAfterSplash(screenId, callback) {
       const isFilled = filledRows[col].has(row);
       const alpha = colAlpha[col];
       d.style.background = isFilled
-        ? `rgba(26,86,160,${alpha})`
-        : `rgba(26,86,160,0.13)`;
+        ? `rgba(0,86,179,${alpha})`
+        : `rgba(0,86,179,0.13)`;
       dotEl.appendChild(d);
       dots.push({ el: d, row, col, isFilled });
     }
@@ -2957,6 +2823,9 @@ function showScreenAfterSplash(screenId, callback) {
     <div class="bubble-grid" id="bubble-grid"></div>
     <div class="hero-scan-line"></div>
 
+    <button class="topbar-iconbtn" id="dark-mode-btn-login" onclick="toggleDarkMode()" title="Alternar modo escuro" aria-label="Modo escuro"
+      style="position:absolute;top:calc(14px + env(safe-area-inset-top,0));right:14px;z-index:2;background:rgba(0,43,92,.35);"></button>
+
     <div class="login-hero-content">
       <!-- Ícone Nota Mestra estático (versão compacta para login) -->
       <div class="login-hero-icon" style="background:#EEF2FA;overflow:visible;position:relative;clip-path:polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%)">
@@ -2965,31 +2834,31 @@ function showScreenAfterSplash(screenId, callback) {
         <!-- grid de bolhas 4×4 inline -->
         <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:52px;height:52px">
           <!-- col 0: 2 preenchidas -->
-          <circle cx="9"  cy="20" r="3.2" fill="#1A56A0" opacity="0.28"/>
-          <circle cx="9"  cy="28" r="3.2" fill="#1A56A0" opacity="0.28"/>
-          <circle cx="9"  cy="36" r="3.2" fill="#1A56A0" opacity="0.28"/>
+          <circle cx="9"  cy="20" r="3.2" fill="#0056B3" opacity="0.28"/>
+          <circle cx="9"  cy="28" r="3.2" fill="#0056B3" opacity="0.28"/>
+          <circle cx="9"  cy="36" r="3.2" fill="#0056B3" opacity="0.28"/>
           <!-- col 1: 3 preenchidas -->
-          <circle cx="18" cy="16" r="3.2" fill="#1A56A0" opacity="0.45"/>
-          <circle cx="18" cy="24" r="3.2" fill="#1A56A0" opacity="0.45"/>
-          <circle cx="18" cy="32" r="3.2" fill="#1A56A0" opacity="0.45"/>
-          <circle cx="18" cy="40" r="3.2" fill="#1A56A0" opacity="0.45"/>
+          <circle cx="18" cy="16" r="3.2" fill="#0056B3" opacity="0.45"/>
+          <circle cx="18" cy="24" r="3.2" fill="#0056B3" opacity="0.45"/>
+          <circle cx="18" cy="32" r="3.2" fill="#0056B3" opacity="0.45"/>
+          <circle cx="18" cy="40" r="3.2" fill="#0056B3" opacity="0.45"/>
           <!-- col 2: 4 preenchidas -->
-          <circle cx="27" cy="12" r="3.2" fill="#1A56A0" opacity="0.65"/>
-          <circle cx="27" cy="20" r="3.2" fill="#1A56A0" opacity="0.65"/>
-          <circle cx="27" cy="28" r="3.2" fill="#1A56A0" opacity="0.65"/>
-          <circle cx="27" cy="36" r="3.2" fill="#1A56A0" opacity="0.65"/>
+          <circle cx="27" cy="12" r="3.2" fill="#0056B3" opacity="0.65"/>
+          <circle cx="27" cy="20" r="3.2" fill="#0056B3" opacity="0.65"/>
+          <circle cx="27" cy="28" r="3.2" fill="#0056B3" opacity="0.65"/>
+          <circle cx="27" cy="36" r="3.2" fill="#0056B3" opacity="0.65"/>
           <!-- col 3: 5 preenchidas (cheia) -->
-          <circle cx="36" cy="8"  r="3.2" fill="#1A56A0"/>
-          <circle cx="36" cy="16" r="3.2" fill="#1A56A0"/>
-          <circle cx="36" cy="24" r="3.2" fill="#1A56A0"/>
-          <circle cx="36" cy="32" r="3.2" fill="#1A56A0"/>
-          <circle cx="36" cy="40" r="3.2" fill="#1A56A0"/>
+          <circle cx="36" cy="8"  r="3.2" fill="#0056B3"/>
+          <circle cx="36" cy="16" r="3.2" fill="#0056B3"/>
+          <circle cx="36" cy="24" r="3.2" fill="#0056B3"/>
+          <circle cx="36" cy="32" r="3.2" fill="#0056B3"/>
+          <circle cx="36" cy="40" r="3.2" fill="#0056B3"/>
           <!-- símbolo + -->
-          <text x="33" y="9" font-size="9" font-weight="900" fill="#1A56A0" text-anchor="middle" dominant-baseline="central">+</text>
+          <text x="33" y="9" font-size="9" font-weight="900" fill="#0056B3" text-anchor="middle" dominant-baseline="central">+</text>
         </svg>
       </div>
       <div>
-        <div class="login-title"><span style="color:#E8F0FE">NOTA</span><span>MESTRA</span></div>
+        <div class="login-title"><span style="color:var(--text)">NOTA</span><span>MESTRA</span></div>
         <div class="login-sub">Corrija provas objetivas em segundos com a câmera do celular</div>
       </div>
     </div>
@@ -3014,7 +2883,7 @@ function showScreenAfterSplash(screenId, callback) {
     <div class="divider">ou</div>
 
     <button class="btn btn-primary" id="btn-email-login" style="opacity:0.6;cursor:not-allowed" disabled>
-      ${ic('mail')} &nbsp;Entrar com e-mail
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg> &nbsp;Entrar com e-mail
       <span style="font-size:10px;opacity:0.6;margin-left:4px">(em breve)</span>
     </button>
 
@@ -3032,7 +2901,7 @@ function showScreenAfterSplash(screenId, callback) {
   <!-- PASSO 1: Escolher criar ou entrar -->
   <div id="ob-step-1">
     <div class="onboarding-header">
-      <div class="onboarding-step-label">Bem-vindo(a) ${ic('hand')}</div>
+      <div class="onboarding-step-label">Bem-vindo(a) <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.83L7 15"/></svg></div>
       <div class="onboarding-title">Vincule sua escola</div>
       <div class="onboarding-sub">
         Todas as provas, turmas e alunos são organizados pela escola.
@@ -3042,14 +2911,14 @@ function showScreenAfterSplash(screenId, callback) {
 
     <div class="onboarding-body">
       <div class="escola-option" id="opt-create" onclick="selectOpt('create')">
-        <div class="escola-option-icon create">${ic('school')}</div>
+        <div class="escola-option-icon create"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/></svg></div>
         <div class="escola-option-info">
-          <div class="escola-option-title">Criar nova escola <span style="font-size:10px;background:rgba(245,166,35,0.2);color:var(--yellow);padding:2px 6px;border-radius:6px;margin-left:4px">Gestor</span></div>
+          <div class="escola-option-title">Criar nova escola <span style="font-size:10px;background:rgba(253,185,19,0.2);color:var(--yellow);padding:2px 6px;border-radius:6px;margin-left:4px">Gestor</span></div>
           <div class="escola-option-sub">Sou coordenador(a) ou gestor(a). Vou cadastrar a escola e gerar o código de acesso para professores.</div>
         </div>
       </div>
       <div class="escola-option" id="opt-join" onclick="selectOpt('join')">
-        <div class="escola-option-icon join">${ic('key')}</div>
+        <div class="escola-option-icon join"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M21 2l-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="M15.5 7.5 19 4l3 3-3.5 3.5"/></svg></div>
         <div class="escola-option-info">
           <div class="escola-option-title">Entrar com código</div>
           <div class="escola-option-sub">Já tenho o código da escola — um colega me passou ou vi na sala dos professores.</div>
@@ -3110,7 +2979,7 @@ function showScreenAfterSplash(screenId, callback) {
       <button class="btn btn-cyan" id="btn-criar-escola" onclick="criarEscola()" disabled>
         Criar escola e gerar código
       </button>
-      <button class="btn btn-ghost" onclick="backToStep1()">${ic('arrow-left')} Voltar</button>
+      <button class="btn btn-ghost" onclick="backToStep1()">← Voltar</button>
     </div>
   </div>
 
@@ -3128,7 +2997,7 @@ function showScreenAfterSplash(screenId, callback) {
                placeholder="AB1C2D" maxlength="6"
                oninput="this.value=this.value.toUpperCase(); checkJoinForm()">
       </div>
-      <div id="join-error" class="hidden" style="padding:12px;background:rgba(230,57,70,0.1);border:1px solid rgba(230,57,70,0.3);border-radius:10px;font-size:13px;color:#FF8A8A;text-align:center;">
+      <div id="join-error" class="hidden" style="padding:12px;background:rgba(227,27,35,0.1);border:1px solid rgba(227,27,35,0.3);border-radius:10px;font-size:13px;color:#FF8A8A;text-align:center;">
         Código não encontrado. Verifique com seu colega.
       </div>
     </div>
@@ -3141,14 +3010,14 @@ function showScreenAfterSplash(screenId, callback) {
       <button class="btn btn-cyan" id="btn-join-escola" onclick="joinEscola()" disabled>
         Entrar na escola
       </button>
-      <button class="btn btn-ghost" onclick="backToStep1()">${ic('arrow-left')} Voltar</button>
+      <button class="btn btn-ghost" onclick="backToStep1()">← Voltar</button>
     </div>
   </div>
 
   <!-- PASSO 3: Código gerado / Sucesso -->
   <div id="ob-step-3" class="hidden">
     <div class="onboarding-header">
-      <div class="onboarding-step-label">Tudo pronto! ${ic('party-popper')}</div>
+      <div class="onboarding-step-label">Tudo pronto! <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
       <div class="onboarding-title" id="ob-step3-title">Escola cadastrada</div>
       <div class="onboarding-sub" id="ob-step3-sub">Compartilhe o código abaixo com seus colegas professores para que eles entrem na mesma escola.</div>
     </div>
@@ -3160,9 +3029,9 @@ function showScreenAfterSplash(screenId, callback) {
         <button class="code-copy-btn" onclick="copyCode()">Copiar</button>
       </div>
 
-      <div class="card" style="background: rgba(0,180,216,0.07); border-color: rgba(0,180,216,0.2);">
+      <div class="card" style="background: rgba(0,168,232,0.07); border-color: rgba(0,168,232,0.2);">
         <div style="font-size:13px; color:var(--text-muted); line-height:1.6;">
-          ${ic('map-pin')} <strong style="color:var(--text);">Dica:</strong> cole o código na sala dos professores ou no grupo do WhatsApp da escola para que qualquer colega possa entrar.
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> <strong style="color:var(--text);">Dica:</strong> cole o código na sala dos professores ou no grupo do WhatsApp da escola para que qualquer colega possa entrar.
         </div>
       </div>
     </div>
@@ -3173,7 +3042,7 @@ function showScreenAfterSplash(screenId, callback) {
         <div class="step-dot active"></div>
       </div>
       <button class="btn btn-cyan" onclick="finishOnboarding()">
-        Começar a usar o app ${ic('arrow-right')}
+        Começar a usar o app →
       </button>
     </div>
   </div>
@@ -3190,34 +3059,36 @@ function showScreenAfterSplash(screenId, callback) {
       <!-- Ícone Nota Mestra mini (topbar) -->
       <div class="topbar-logo-icon" style="background:#EEF2FA;overflow:hidden;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%)">
         <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:26px;height:26px">
-          <circle cx="6"  cy="14" r="2.1" fill="#1A56A0" opacity="0.28"/>
-          <circle cx="6"  cy="19" r="2.1" fill="#1A56A0" opacity="0.28"/>
-          <circle cx="6"  cy="24" r="2.1" fill="#1A56A0" opacity="0.28"/>
-          <circle cx="12" cy="11" r="2.1" fill="#1A56A0" opacity="0.45"/>
-          <circle cx="12" cy="16" r="2.1" fill="#1A56A0" opacity="0.45"/>
-          <circle cx="12" cy="21" r="2.1" fill="#1A56A0" opacity="0.45"/>
-          <circle cx="12" cy="26" r="2.1" fill="#1A56A0" opacity="0.45"/>
-          <circle cx="18" cy="8"  r="2.1" fill="#1A56A0" opacity="0.65"/>
-          <circle cx="18" cy="13" r="2.1" fill="#1A56A0" opacity="0.65"/>
-          <circle cx="18" cy="18" r="2.1" fill="#1A56A0" opacity="0.65"/>
-          <circle cx="18" cy="23" r="2.1" fill="#1A56A0" opacity="0.65"/>
-          <circle cx="24" cy="5"  r="2.1" fill="#1A56A0"/>
-          <circle cx="24" cy="10" r="2.1" fill="#1A56A0"/>
-          <circle cx="24" cy="15" r="2.1" fill="#1A56A0"/>
-          <circle cx="24" cy="20" r="2.1" fill="#1A56A0"/>
-          <circle cx="24" cy="25" r="2.1" fill="#1A56A0"/>
+          <circle cx="6"  cy="14" r="2.1" fill="#0056B3" opacity="0.28"/>
+          <circle cx="6"  cy="19" r="2.1" fill="#0056B3" opacity="0.28"/>
+          <circle cx="6"  cy="24" r="2.1" fill="#0056B3" opacity="0.28"/>
+          <circle cx="12" cy="11" r="2.1" fill="#0056B3" opacity="0.45"/>
+          <circle cx="12" cy="16" r="2.1" fill="#0056B3" opacity="0.45"/>
+          <circle cx="12" cy="21" r="2.1" fill="#0056B3" opacity="0.45"/>
+          <circle cx="12" cy="26" r="2.1" fill="#0056B3" opacity="0.45"/>
+          <circle cx="18" cy="8"  r="2.1" fill="#0056B3" opacity="0.65"/>
+          <circle cx="18" cy="13" r="2.1" fill="#0056B3" opacity="0.65"/>
+          <circle cx="18" cy="18" r="2.1" fill="#0056B3" opacity="0.65"/>
+          <circle cx="18" cy="23" r="2.1" fill="#0056B3" opacity="0.65"/>
+          <circle cx="24" cy="5"  r="2.1" fill="#0056B3"/>
+          <circle cx="24" cy="10" r="2.1" fill="#0056B3"/>
+          <circle cx="24" cy="15" r="2.1" fill="#0056B3"/>
+          <circle cx="24" cy="20" r="2.1" fill="#0056B3"/>
+          <circle cx="24" cy="25" r="2.1" fill="#0056B3"/>
         </svg>
       </div>
       <div>
-        <div class="topbar-title" style="letter-spacing:-0.01em"><span style="color:var(--text)">NOTA</span><span style="color:var(--cyan)">MESTRA</span></div>
+        <div class="topbar-title" style="letter-spacing:-0.01em"><span style="color:#fff">NOTA</span><span style="color:var(--cyan)">MESTRA</span></div>
         <div class="topbar-escola" id="topbar-escola-name" onclick="abrirSeletorEscolas()" style="cursor:pointer">Carregando... ▾</div>
       </div>
     </div>
     <div class="topbar-right">
+      <button class="topbar-iconbtn" id="dark-mode-btn" onclick="toggleDarkMode()" title="Alternar modo escuro" aria-label="Modo escuro"></button>
       <div class="topbar-avatar" id="topbar-avatar" onclick="navTo('mais')">
         <span id="topbar-avatar-initials">?</span>
       </div>
     </div>
+    <div class="topbar-brand-line"><span class="bl-yellow"></span><span class="bl-red"></span><span class="bl-cyan"></span></div>
   </div>
 
   <!-- Conteúdo -->
@@ -3269,8 +3140,39 @@ function showScreenAfterSplash(screenId, callback) {
 
 <script>
 /* ═══════════════════════════════════════════
+   MODO CLARO / ESCURO (mesmo padrão do Nota Mestra)
+═══════════════════════════════════════════ */
+const ICON_SUN  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:block;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+const ICON_MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:block;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+function syncDarkModeBtn() {
+  var isDark = document.body.classList.contains('dark-mode');
+  ['dark-mode-btn', 'dark-mode-btn-login'].forEach(function(id) {
+    var btn = document.getElementById(id);
+    if (btn) {
+      btn.innerHTML = isDark ? ICON_SUN : ICON_MOON;
+      btn.title = isDark ? 'Modo claro' : 'Modo escuro';
+    }
+  });
+}
+function toggleDarkMode() {
+  var isDark = document.body.classList.toggle('dark-mode');
+  syncDarkModeBtn();
+  try { localStorage.setItem('cm_dark', isDark ? '1' : '0'); } catch(e) {}
+}
+(function() {
+  try {
+    if (localStorage.getItem('cm_dark') === '1') {
+      document.body.classList.add('dark-mode');
+    }
+  } catch(e) {}
+  document.addEventListener('DOMContentLoaded', syncDarkModeBtn);
+})();
+</script>
+
+<script>
+/* ═══════════════════════════════════════════
    FIREBASE CONFIG
-   ${ic('alert-triangle')} Substitua pelos dados do seu projeto
+   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Substitua pelos dados do seu projeto
 ═══════════════════════════════════════════ */
 const firebaseConfig = {
   apiKey:            "AIzaSyD3N6wD-cMV_fTb8vV4t0c7HcvEVQfvRRc",
@@ -3326,7 +3228,6 @@ function showScreen(id) {
     target.classList.add('screen-enter');
     setTimeout(() => target.classList.remove('screen-enter'), 400);
   }
-  if (id === 'screen-login' && typeof resetGoogleLoginButton === 'function') resetGoogleLoginButton();
 }
 
 function toast(msg, type = '') {
@@ -3369,72 +3270,96 @@ function initials(name) {
    AUTH
 ═══════════════════════════════════════════ */
 // Login Google
-const GOOGLE_BTN_HTML = `<svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Continuar com Google`;
-
-/* Garante que o botão do Google nunca fique "preso" em estado de carregando —
-   chamada sempre que a tela de login é exibida (defesa extra, além dos
-   pontos onde já resetamos manualmente no sucesso/erro/cancelamento). */
-function resetGoogleLoginButton() {
-  const btn = document.getElementById('btn-google-login');
-  if (btn) { btn.disabled = false; btn.innerHTML = GOOGLE_BTN_HTML; }
-}
+// Alvo do PRÓXIMO idToken que a ponte nativa (window.LeituraAndroid) devolver:
+// 'primary' = login principal do Leitor · 'nm' = conexão com o Nota Mestra.
+// Necessário porque o Android só tem UMA ponte nativa de Google Sign-In,
+// reaproveitada pelos dois fluxos (ver loginNMGoogle mais abaixo).
+let _googleSignInAlvo = 'primary';
 
 document.getElementById('btn-google-login').onclick = async () => {
-  /*
-   * ANDROID WEBVIEW: no Android Studio, MainActivity intercepta o clique
-   * via window.LeituraAndroid.googleSignIn() e devolve o idToken chamando
-   * window.onGoogleIdToken(token). Se o usuário cancelar o seletor de conta
-   * nativo, o Android deve chamar window.onGoogleSignInCancelled() para
-   * destravar o botão (ver MainActivity.kt).
-   * Fora do APK (navegador), usa signInWithPopup para testes.
+  /* 
+   * ANDROID WEBVIEW: este bloco precisará de bridge nativa (igual ao Nota Mestra).
+   * No Android Studio, intercepte window.LeituraAndroid.googleSignIn()
+   * e retorne o idToken via window.onGoogleIdToken(token).
+   * Por ora, usa signInWithPopup para testes no navegador.
    */
-  const btn = document.getElementById('btn-google-login');
-  btn.disabled = true;
-  btn.innerHTML = '<div class="spinner" style="border-top-color:#4285F4"></div> Entrando...';
-
+  _googleSignInAlvo = 'primary';
   if (window.LeituraAndroid?.googleSignIn) {
     window.LeituraAndroid.googleSignIn();
     return;
   }
+  const btn = document.getElementById('btn-google-login');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="border-top-color:#4285F4"></div> Entrando...';
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     await auth.signInWithPopup(provider);
-    // sucesso: onAuthStateChanged navega para outra tela; o botão já não
-    // fica visível, mas deixamos resetado para o caso de um novo logout.
-    resetGoogleLoginButton();
   } catch (e) {
-    resetGoogleLoginButton();
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Continuar com Google`;
     toast('Erro ao entrar: ' + (e.message || 'tente novamente'), 'error');
   }
 };
 
-// Bridge Android → recebe idToken e faz login
+// Bridge Android → recebe idToken e faz login. Como a ponte nativa é
+// compartilhada entre o login principal e a conexão com o Nota Mestra,
+// _googleSignInAlvo diz pra qual instância do Firebase Auth ele vai.
+//
+// <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Isso só funciona de verdade se o Google Sign-In do Nota Mestra
+// aceitar o mesmo client OAuth usado pelo Leitor de Gabaritos nativamente
+// (o token não "sabe" para qual projeto Firebase ele vai — o Firebase de
+// destino é quem valida se aceita esse client). Se dar erro de credencial
+// inválida aqui, use "E-mail / Senha" na conexão com o Nota Mestra em vez
+// de "Entrar com Google" — funciona sempre, sem depender de nenhuma ponte
+// nativa nem de configuração de OAuth compartilhada entre os dois apps.
 window.onGoogleIdToken = async (idToken) => {
+  const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
+
+  if (_googleSignInAlvo === 'nm') {
+    const msgEl = document.getElementById('nm-login-msg');
+    try {
+      const cred = await nmAuth.signInWithCredential(credential);
+      nmLink.user = cred.user;
+      toast('Conectado ao Nota Mestra!', 'success');
+      await carregarTurmasNM(true);
+      abrirConexaoNM();
+    } catch (e) {
+      if (msgEl) { msgEl.textContent = _traduzErroAuthNM(e); msgEl.className = 'nm-msg error'; }
+      setLoading('btn-nm-google', false);
+    }
+    return;
+  }
+
   try {
-    const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
     await auth.signInWithCredential(credential);
-    resetGoogleLoginButton();
   } catch (e) {
-    resetGoogleLoginButton();
     toast('Erro ao autenticar: ' + e.message, 'error');
   }
 };
 
 // Bridge Android → usuário cancelou o seletor de conta nativo (sem erro)
 window.onGoogleSignInCancelled = () => {
-  resetGoogleLoginButton();
+  if (_googleSignInAlvo === 'nm') {
+    setLoading('btn-nm-google', false);
+    return;
+  }
+  const btn = document.getElementById('btn-google-login');
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = `<svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Continuar com Google`;
+  }
 };
 
 async function signOut() {
   try {
     await auth.signOut();
   } finally {
-    // Cache local por escola — evita mostrar turmas/alunos/provas da
-    // conta/escola anterior caso outra pessoa entre em seguida.
-    cache.turmas = cache.alunos = cache.provas = null;
-    if (typeof cacheRes !== 'undefined') cacheRes.items = null;
     // Restaura o botão do Google após o logout (seja bem ou mal-sucedido)
-    resetGoogleLoginButton();
+    const btn = document.getElementById('btn-google-login');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Continuar com Google`;
+    }
   }
 }
 
@@ -3709,29 +3634,6 @@ function showApp() {
 }
 
 /* ── Navegação ── */
-/* ─── Bridge Android: botão físico/gesto de voltar ───
-   MainActivity.onBackPressedDispatcher chama window.handleAndroidBack()
-   antes de decidir sair do app. Retorna true se algo foi fechado/navegado
-   aqui (Android não deve agir), ou false se o Android deve tratar (sair
-   do app, ou perguntar "toque de novo para sair" na tela inicial). */
-window.handleAndroidBack = function () {
-  const overlayIds = ['e4-cam-overlay', 'e4-alt-modal', 'lg-print-overlay', 'modal-overlay'];
-  for (const id of overlayIds) {
-    const el = document.getElementById(id);
-    if (el) {
-      if (id === 'e4-cam-overlay') { fecharCamera(); }
-      else { el.remove(); }
-      return true;
-    }
-  }
-  if (typeof app !== 'undefined' && app.currentNav && app.currentNav !== 'inicio' &&
-      document.getElementById('screen-app') && !document.getElementById('screen-app').classList.contains('hidden')) {
-    navTo('inicio');
-    return true;
-  }
-  return false;
-};
-
 function navTo(view) {
   app.currentNav = view;
   ['inicio','provas','turmas','alunos','mais'].forEach(v => {
@@ -3761,11 +3663,11 @@ function inicio() {
   return `
   <div class="dash-header">
     <div class="dash-greeting">${saud},</div>
-    <div class="dash-name">${nome} ${ic('hand')}</div>
+    <div class="dash-name">${nome} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.83L7 15"/></svg></div>
   </div>
 
   <div class="dash-escola-card">
-    <div class="dash-escola-icon">${ic('school')}</div>
+    <div class="dash-escola-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/></svg></div>
     <div class="dash-escola-info">
       <div class="dash-escola-name">${escola?.nome || '—'}</div>
       <div class="dash-escola-code">${escola?.codigo || '——'}</div>
@@ -3796,7 +3698,7 @@ function inicio() {
   <div class="dash-section-title">Ações rápidas</div>
   <div class="dash-quick-actions">
     <div class="quick-action" onclick="navTo('provas')">
-      <div class="quick-action-icon green">${ic('clipboard-list')}</div>
+      <div class="quick-action-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="6" y="4" width="12" height="18" rx="2"/></svg></div>
       <div class="quick-action-text">
         <div class="quick-action-title">Nova prova</div>
         <div class="quick-action-sub">Criar gabarito e gerar cartão-resposta</div>
@@ -3804,7 +3706,7 @@ function inicio() {
       <div class="quick-action-arrow">›</div>
     </div>
     <div class="quick-action" onclick="navTo('provas')">
-      <div class="quick-action-icon yellow">${ic('camera')}</div>
+      <div class="quick-action-icon yellow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
       <div class="quick-action-text">
         <div class="quick-action-title">Corrigir prova</div>
         <div class="quick-action-sub">Selecione uma prova para fotografar</div>
@@ -3812,7 +3714,7 @@ function inicio() {
       <div class="quick-action-arrow">›</div>
     </div>
     <div class="quick-action" onclick="navTo('turmas')">
-      <div class="quick-action-icon blue">${ic('users')}</div>
+      <div class="quick-action-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
       <div class="quick-action-text">
         <div class="quick-action-title">Gerenciar turmas</div>
         <div class="quick-action-sub">Adicionar turmas e alunos da escola</div>
@@ -3844,7 +3746,7 @@ function mais() {
   <div class="mais-section">
     <div class="mais-section-title">Escola</div>
     <div class="mais-item" onclick="mostrarCodigo()">
-      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">${ic('key')}</div>
+      <div class="mais-item-icon" style="background:rgba(0,168,232,0.15);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M21 2l-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/><path d="M15.5 7.5 19 4l3 3-3.5 3.5"/></svg></div>
       <div class="mais-item-text">
         <div class="mais-item-title">Código da escola</div>
         <div class="mais-item-sub">Compartilhe com professores para que entrem</div>
@@ -3852,14 +3754,14 @@ function mais() {
       <div class="mais-item-arrow">›</div>
     </div>
     <div class="mais-item">
-      <div class="mais-item-icon" style="background:rgba(26,86,160,0.2);">${ic('school')}</div>
+      <div class="mais-item-icon" style="background:rgba(0,86,179,0.2);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/></svg></div>
       <div class="mais-item-text">
         <div class="mais-item-title">${app.escola?.nome || '—'}</div>
         <div class="mais-item-sub">${app.escola?.cidade || ''} · ${app.escola?.rede || ''}</div>
       </div>
     </div>
     <div class="mais-item" onclick="abrirSeletorEscolas()">
-      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">${ic('repeat')}</div>
+      <div class="mais-item-icon" style="background:rgba(0,168,232,0.15);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
       <div class="mais-item-text">
         <div class="mais-item-title">Trocar de escola</div>
         <div class="mais-item-sub">${(app.professor?.escolas||[]).length} escola(s) vinculada(s)</div>
@@ -3868,7 +3770,7 @@ function mais() {
     </div>
     ${ isGestao() ? `
     <div class="mais-item" onclick="abrirEquipe()">
-      <div class="mais-item-icon" style="background:rgba(245,166,35,0.15);">${ic('users')}</div>
+      <div class="mais-item-icon" style="background:rgba(253,185,19,0.15);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
       <div class="mais-item-text">
         <div class="mais-item-title">Gerenciar equipe</div>
         <div class="mais-item-sub">Ver, promover e remover membros</div>
@@ -3877,7 +3779,7 @@ function mais() {
     </div>` : '' }
     ${ isDono() ? `
     <div class="mais-item" onclick="mostrarCodigoGestao()">
-      <div class="mais-item-icon" style="background:rgba(245,166,35,0.18);">${ic('shield-check')}</div>
+      <div class="mais-item-icon" style="background:rgba(253,185,19,0.18);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
       <div class="mais-item-text">
         <div class="mais-item-title">Código de gestão</div>
         <div class="mais-item-sub">Para convidar coordenadores(as) com acesso completo</div>
@@ -3885,7 +3787,7 @@ function mais() {
       <div class="mais-item-arrow">›</div>
     </div>
     <div class="mais-item" onclick="abrirEditarEscola()">
-      <div class="mais-item-icon" style="background:rgba(26,86,160,0.18);">${ic('pencil')}</div>
+      <div class="mais-item-icon" style="background:rgba(0,86,179,0.18);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></div>
       <div class="mais-item-text">
         <div class="mais-item-title">Editar dados da escola</div>
         <div class="mais-item-sub">Nome, cidade, rede</div>
@@ -3893,14 +3795,14 @@ function mais() {
       <div class="mais-item-arrow">›</div>
     </div>
     <div class="mais-item" onclick="confirmExcluirEscola()">
-      <div class="mais-item-icon" style="background:rgba(230,57,70,0.12);">${ic('trash-2')}</div>
+      <div class="mais-item-icon" style="background:rgba(227,27,35,0.12);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></div>
       <div class="mais-item-text">
         <div class="mais-item-title" style="color:var(--red)">Excluir escola</div>
         <div class="mais-item-sub">Remove a escola e todos os dados desta escola.</div>
       </div>
     </div>` : `
     <div class="mais-item" onclick="confirmSairEscola()">
-      <div class="mais-item-icon" style="background:rgba(230,57,70,0.12);">${ic('log-out')}</div>
+      <div class="mais-item-icon" style="background:rgba(227,27,35,0.12);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></div>
       <div class="mais-item-text">
         <div class="mais-item-title" style="color:var(--red)">Sair desta escola</div>
         <div class="mais-item-sub">Desvincula você apenas desta escola.</div>
@@ -3911,7 +3813,7 @@ function mais() {
   <div class="mais-section">
     <div class="mais-section-title">Meu perfil</div>
     <div class="mais-item" onclick="abrirEditarDisciplinas()">
-      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">${ic('book-copy')}</div>
+      <div class="mais-item-icon" style="background:rgba(0,168,232,0.15);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
       <div class="mais-item-text">
         <div class="mais-item-title">Minhas disciplinas</div>
         <div class="mais-item-sub">${(app.professor?.disciplinas||[]).length > 0 ? escapeHtml((app.professor.disciplinas).join(', ')) : 'Nenhuma definida ainda'}</div>
@@ -3923,7 +3825,7 @@ function mais() {
   <div class="mais-section">
     <div class="mais-section-title">Integração</div>
     <div class="mais-item" onclick="abrirConexaoNM()">
-      <div class="mais-item-icon" style="background:rgba(0,180,216,0.15);">${ic('link')}</div>
+      <div class="mais-item-icon" style="background:rgba(0,168,232,0.15);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
       <div class="mais-item-text">
         <div class="mais-item-title">Conectar ao Nota Mestra</div>
         <div class="mais-item-sub">${ nmLink.user ? `Conectado como ${escapeHtml(nmLink.user.email||nmLink.user.displayName||'')} · ${nmLink.turmas.length} turma(s)` : 'Necessário para importar notas direto pra lá' }</div>
@@ -3931,7 +3833,7 @@ function mais() {
       <div class="mais-item-arrow">›</div>
     </div>
     <div class="mais-item" onclick="abrirExportacaoNM()">
-      <div class="mais-item-icon" style="background:rgba(245,166,35,0.15);">${ic('upload')}</div>
+      <div class="mais-item-icon" style="background:rgba(253,185,19,0.15);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
       <div class="mais-item-text">
         <div class="mais-item-title">Exportar para Nota Mestra</div>
         <div class="mais-item-sub">JSON por turma e prova, compatível com o backup</div>
@@ -3943,7 +3845,7 @@ function mais() {
   <div class="mais-section">
     <div class="mais-section-title">Conta</div>
     <div class="mais-item" onclick="confirmSignOut()">
-      <div class="mais-item-icon" style="background:rgba(230,57,70,0.12);">${ic('log-out')}</div>
+      <div class="mais-item-icon" style="background:rgba(227,27,35,0.12);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></div>
       <div class="mais-item-text">
         <div class="mais-item-title" style="color:var(--red)">Sair da conta</div>
         <div class="mais-item-sub">Você precisará entrar novamente</div>
@@ -4037,7 +3939,7 @@ function confirmExcluirEscola() {
   closeModal();
   showModal(`
     <div class="modal-handle"></div>
-    <div class="modal-title" style="color:var(--red)">${ic('alert-triangle')} Excluir escola?</div>
+    <div class="modal-title" style="color:var(--red)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Excluir escola?</div>
     <div style="font-size:14px;color:var(--text-muted);line-height:1.6;">
       Isso irá excluir permanentemente <strong style="color:var(--text)">${app.escola?.nome || 'esta escola'}</strong> e <strong style="color:var(--text)">todos os dados</strong> (provas, turmas, alunos e resultados).<br><br>
       <span style="color:var(--red)">Esta ação não pode ser desfeita.</span>
@@ -4128,7 +4030,7 @@ async function abrirEquipe() {
             <div style="font-size:12px;color:var(--text-muted)">${escapeHtml(m.email||'')}</div>
           </div>
           <button onclick="confirmarRemoverProf('${m.uid}','${escapeHtml(m.nome||'')}')"
-            style="padding:6px 10px;border-radius:8px;background:rgba(230,57,70,0.1);border:1px solid rgba(230,57,70,0.25);color:var(--red);font-size:12px;font-weight:600;cursor:pointer">
+            style="padding:6px 10px;border-radius:8px;background:rgba(227,27,35,0.1);border:1px solid rgba(227,27,35,0.25);color:var(--red);font-size:12px;font-weight:600;cursor:pointer">
             Remover
           </button>
         </div>`).join('');
@@ -4214,13 +4116,13 @@ function abrirSeletorEscolas() {
     ? `<div style="text-align:center;padding:24px 0;color:var(--text-muted);font-size:13px">Nenhuma escola vinculada.</div>`
     : escolas.map(e => `
       <div onclick="trocarEscolaAtiva('${e.escolaId}')"
-        style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:${e.escolaId===app.escolaId?'rgba(0,180,216,0.12)':'var(--surface2)'};border:1px solid ${e.escolaId===app.escolaId?'var(--cyan)':'var(--border2)'}">
-        <div style="width:38px;height:38px;border-radius:10px;background:rgba(26,86,160,0.18);display:flex;align-items:center;justify-content:center;font-size:18px">${ic('school')}</div>
+        style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:${e.escolaId===app.escolaId?'rgba(0,168,232,0.12)':'var(--surface2)'};border:1px solid ${e.escolaId===app.escolaId?'var(--cyan)':'var(--border2)'}">
+        <div style="width:38px;height:38px;border-radius:10px;background:rgba(0,86,179,0.18);display:flex;align-items:center;justify-content:center;font-size:18px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="22" x2="9" y2="12"/><line x1="15" y1="22" x2="15" y2="12"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="15" y1="7" x2="15.01" y2="7"/></svg></div>
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(e.escolaNome||'—')}</div>
           <div style="font-size:11px;color:var(--text-muted)">${papelLabel(e.role)}${e.escolaId===app.escolaId?' · Ativa':''}</div>
         </div>
-        ${e.escolaId===app.escolaId?`<span style="color:var(--cyan);font-size:18px">${ic('check')}</span>`:''}
+        ${e.escolaId===app.escolaId?'<span style="color:var(--cyan);font-size:18px">✓</span>':''}
       </div>`).join('');
   showModal(`
     <div class="modal-handle"></div>
@@ -4464,9 +4366,9 @@ async function abrirEquipe() {
         const podeEditar = isGestao() && !ehDono && !eu;
         const acoes = !podeEditar ? '' : `
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-            ${m.papelNesta==='professor' ? `<button onclick="alterarPapelMembro('${m.uid}','coordenador')" style="padding:5px 9px;border-radius:7px;background:rgba(245,166,35,0.15);border:1px solid rgba(245,166,35,0.3);color:var(--yellow);font-size:11px;font-weight:600;cursor:pointer">${ic('arrow-up')} Promover a coord.</button>` : ''}
-            ${m.papelNesta==='coordenador' ? `<button onclick="alterarPapelMembro('${m.uid}','professor')" style="padding:5px 9px;border-radius:7px;background:rgba(26,86,160,0.12);border:1px solid rgba(26,86,160,0.25);color:var(--blue);font-size:11px;font-weight:600;cursor:pointer">${ic('arrow-down')} Rebaixar a prof.</button>` : ''}
-            <button onclick="confirmarRemoverProf('${m.uid}','${escapeHtml(m.nome||'').replace(/'/g, "\\'")}')" style="padding:5px 9px;border-radius:7px;background:rgba(230,57,70,0.1);border:1px solid rgba(230,57,70,0.25);color:var(--red);font-size:11px;font-weight:600;cursor:pointer">Remover</button>
+            ${m.papelNesta==='professor' ? `<button onclick="alterarPapelMembro('${m.uid}','coordenador')" style="padding:5px 9px;border-radius:7px;background:rgba(253,185,19,0.15);border:1px solid rgba(253,185,19,0.3);color:var(--yellow);font-size:11px;font-weight:600;cursor:pointer">↑ Promover a coord.</button>` : ''}
+            ${m.papelNesta==='coordenador' ? `<button onclick="alterarPapelMembro('${m.uid}','professor')" style="padding:5px 9px;border-radius:7px;background:rgba(0,86,179,0.12);border:1px solid rgba(0,86,179,0.25);color:var(--blue);font-size:11px;font-weight:600;cursor:pointer">↓ Rebaixar a prof.</button>` : ''}
+            <button onclick="confirmarRemoverProf('${m.uid}','${escapeHtml(m.nome||'').replace(/'/g, "\\'")}')" style="padding:5px 9px;border-radius:7px;background:rgba(227,27,35,0.1);border:1px solid rgba(227,27,35,0.25);color:var(--red);font-size:11px;font-weight:600;cursor:pointer">Remover</button>
           </div>`;
         const badgeCor = ehDono ? 'yellow' : (m.papelNesta==='coordenador'?'cyan':'blue');
         return `
@@ -4645,10 +4547,10 @@ function abrirConexaoNM() {
     </div>
     ${ conectado ? `
       <div class="nm-msg success" style="margin-bottom:10px">
-        ${ic('check-circle')} Conectado como <strong>${escapeHtml(nmLink.user.email || nmLink.user.displayName || '')}</strong><br>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg> Conectado como <strong>${escapeHtml(nmLink.user.email || nmLink.user.displayName || '')}</strong><br>
         ${nmLink.turmas.length} turma(s) carregada(s) do Nota Mestra.
       </div>
-      <button class="btn btn-cyan" id="btn-nm-atualizar" onclick="carregarTurmasNM(true)">${ic('refresh-cw')} Atualizar turmas</button>
+      <button class="btn btn-cyan" id="btn-nm-atualizar" onclick="carregarTurmasNM(true)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Atualizar turmas</button>
       <button class="btn btn-ghost" id="btn-nm-desconectar" onclick="desconectarNM()" style="margin-top:8px">Desconectar</button>
     ` : `
       <div class="input-group">
@@ -4696,6 +4598,19 @@ async function loginNM() {
 async function loginNMGoogle() {
   const msgEl = document.getElementById('nm-login-msg');
   setLoading('btn-nm-google', true);
+
+  // Dentro do APK: reaproveita a MESMA ponte nativa do login principal.
+  // window.LeituraAndroid.googleSignIn() abre o seletor de conta do
+  // Android (nativo), que NÃO é bloqueado pelo Google — diferente de
+  // signInWithPopup, que o Google recusa dentro de WebView desde 2021
+  // ("the requested action is invalid" é exatamente esse bloqueio).
+  if (window.LeituraAndroid?.googleSignIn) {
+    _googleSignInAlvo = 'nm';
+    window.LeituraAndroid.googleSignIn();
+    return; // resposta chega em window.onGoogleIdToken / onGoogleSignInCancelled
+  }
+
+  // Fora do APK (navegador comum), signInWithPopup funciona normalmente
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     const cred = await nmAuth.signInWithPopup(provider);
@@ -4714,10 +4629,12 @@ function _traduzErroAuthNM(e) {
   const map = {
     'auth/wrong-password':       'Senha incorreta.',
     'auth/user-not-found':       'Não existe uma conta do Nota Mestra com esse e-mail.',
-    'auth/invalid-credential':   'E-mail ou senha incorretos.',
+    'auth/invalid-credential':   'Não deu pra entrar com essas credenciais. Se foi pelo Google, tente "E-mail / Senha" em vez disso.',
     'auth/invalid-email':        'E-mail inválido.',
     'auth/too-many-requests':    'Muitas tentativas. Tente de novo em alguns minutos.',
     'auth/popup-closed-by-user': 'Login cancelado.',
+    'auth/user-disabled':        'Essa conta do Nota Mestra está desativada.',
+    'auth/account-exists-with-different-credential': 'Esse e-mail já tem uma conta no Nota Mestra com outro método de login. Tente "E-mail / Senha".',
     'auth/network-request-failed': 'Falha de conexão. Verifique sua internet.'
   };
   return map[e.code] || ('Erro ao conectar: ' + e.message);
@@ -4869,7 +4786,7 @@ function renderFormImportacaoNM() {
 
   const origemPicker = precisaEscolherOrigem ? `
     <div class="input-group">
-      <label class="input-label">Turma de origem (Correção Mestra)</label>
+      <label class="input-label">Turma de origem (Leitor de Gabaritos)</label>
       <select class="input" id="imp-nm-origem" onchange="_impNM.origemTurmaId=this.value">
         ${origensPossiveis.map(t => `
           <option value="${t.id}" ${t.id === _impNM.origemTurmaId ? 'selected' : ''}>${escapeHtml(t.nome)}</option>
@@ -4953,7 +4870,7 @@ function renderFormImportacaoNM() {
     ${atividadeHtml}
 
     <button class="btn btn-cyan" id="btn-imp-nm-continuar" onclick="continuarImportacaoNM()" ${ podeContinuar ? '' : 'disabled' }>
-      Continuar ${ic('arrow-right')}
+      Continuar →
     </button>
     <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Cancelar</button>
   `);
@@ -5106,7 +5023,7 @@ function renderConfirmacaoImportacaoNM() {
       </td>
       <td style="font-size:.75rem;padding:4px 6px;text-align:center">
         ${ p.matchIdx >= 0
-          ? `<span style="color:#4CD964;font-weight:700">${ic('check')} ${escapeHtml(p.nomeDestino)}</span>`
+          ? `<span style="color:#4CD964;font-weight:700">✓ ${escapeHtml(p.nomeDestino)}</span>`
           : `<span style="color:var(--red);font-size:.7rem">Não encontrado</span>` }
       </td>
     </tr>`).join('');
@@ -5115,15 +5032,15 @@ function renderConfirmacaoImportacaoNM() {
     <div class="modal-handle"></div>
     <div class="modal-title">Confirmar importação</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
-      ${escapeHtml(prova?.nome || '')} ${ic('arrow-right')} <strong>${escapeHtml(turmaDestino?.nome || '')}</strong> ·
+      ${escapeHtml(prova?.nome || '')} → <strong>${escapeHtml(turmaDestino?.nome || '')}</strong> ·
       ${escapeHtml(unidade?.label || '')} ·
       ${ _impNM.tipo === 'prova' ? 'Prova da unidade' : `Atividade (${_impNM.atividadeAlvo.replace('atv','')}ª)` }
       ${ _impNM.disciplina ? ' · ' + escapeHtml(_impNM.disciplina) : '' }
     </div>
 
     ${ provaNaoVale10 ? `
-      <div class="nm-msg" style="margin-bottom:8px;background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.3);color:var(--yellow)">
-        ℹ Essa prova vale ${maxProva} (soma dos pesos das questões), não 10. As notas abaixo são
+      <div class="nm-msg" style="margin-bottom:8px;background:rgba(253,185,19,0.12);border:1px solid rgba(253,185,19,0.3);color:var(--yellow)">
+        ℹ️ Essa prova vale ${maxProva} (soma dos pesos das questões), não 10. As notas abaixo são
         enviadas exatamente nesse valor — sem reescalar pra 0–10. Se não era isso que você queria,
         ajuste os pesos da prova no Leitor pra somarem 10 antes de importar.
       </div>` : '' }
@@ -5132,7 +5049,7 @@ function renderConfirmacaoImportacaoNM() {
       const dataEnvio = new Date(envioAnterior.enviadoEm).toLocaleString('pt-BR');
       if (statusAnterior === 'aplicado') {
         return `<div class="nm-msg" style="margin-bottom:8px;background:rgba(76,217,100,0.12);border:1px solid rgba(76,217,100,0.3);color:#4CD964">
-          ${ic('check-circle')} Você já importou isso em ${dataEnvio} (${envioAnterior.qtdAlunos} aluno(s)) e já foi <strong>aplicado</strong>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg> Você já importou isso em ${dataEnvio} (${envioAnterior.qtdAlunos} aluno(s)) e já foi <strong>aplicado</strong>
           no Nota Mestra. Enviar de novo só faz sentido se for uma correção — as notas serão sobrescritas lá quando você aplicar de novo.
         </div>`;
       }
@@ -5145,12 +5062,12 @@ function renderConfirmacaoImportacaoNM() {
       }
       if (statusAnterior === 'excluido') {
         return `<div class="nm-msg info" style="margin-bottom:8px">
-          ℹ Você importou isso em ${dataEnvio}, mas foi <strong>excluído</strong> sem ser aplicado — pode
+          ℹ️ Você importou isso em ${dataEnvio}, mas foi <strong>excluído</strong> sem ser aplicado — pode
           enviar de novo tranquilamente.
         </div>`;
       }
       return `<div class="nm-msg error" style="margin-bottom:8px">
-        ${ic('alert-triangle')} Você já importou essa mesma combinação (turma, unidade, ${_impNM.tipo === 'prova' ? 'prova' : 'atividade'})
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Você já importou essa mesma combinação (turma, unidade, ${_impNM.tipo === 'prova' ? 'prova' : 'atividade'})
         em ${dataEnvio} (${envioAnterior.qtdAlunos} aluno(s)), mas não consegui confirmar o status atual lá no
         Nota Mestra agora. Enviar de novo pode duplicar notas se aquele envio já tiver sido aplicado.
       </div>`;
@@ -5159,7 +5076,7 @@ function renderConfirmacaoImportacaoNM() {
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
       <span class="badge badge-cyan">${enviaveis.length} pronto(s) pra enviar</span>
       ${ casadosSemNota.length ? `<span class="badge badge-yellow">${casadosSemNota.length} sem nota</span>` : '' }
-      ${ naoCasados.length ? `<span class="badge" style="background:rgba(230,57,70,0.15);color:var(--red)">${naoCasados.length} não encontrado(s)</span>` : '' }
+      ${ naoCasados.length ? `<span class="badge" style="background:rgba(227,27,35,0.15);color:var(--red)">${naoCasados.length} não encontrado(s)</span>` : '' }
     </div>
 
     <div style="max-height:44vh;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r-md)">
@@ -5183,7 +5100,7 @@ function renderConfirmacaoImportacaoNM() {
 
     <button class="btn btn-cyan" id="btn-imp-nm-confirmar" style="margin-top:10px" onclick="confirmarEnvioNM()"
       ${ enviaveis.length ? '' : 'disabled' }>
-      ${ic('check-circle')} Confirmar importação (${enviaveis.length} aluno${enviaveis.length === 1 ? '' : 's'})
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg> Confirmar importação (${enviaveis.length} aluno${enviaveis.length === 1 ? '' : 's'})
     </button>
     <button class="btn btn-ghost" style="margin-top:8px" onclick="renderFormImportacaoNM()">‹ Voltar</button>
   `);
@@ -5283,7 +5200,7 @@ function px(mm) { return Math.round(mm * CARTAO.DPI / 25.4); }
 
 /* ─────────────────────────────────────────────────
    ALGORITMO DE LAYOUT
-   Prioridade: portrait ${ic('arrow-right')} landscape
+   Prioridade: portrait → landscape
    Preenche a altura disponível escalando rowH
 ───────────────────────────────────────────────── */
 function calcLayout(nQ, nA) {
@@ -5605,8 +5522,8 @@ async function gerarCartao(provaId) {
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <button class="btn btn-cyan" onclick="downloadPNG()">${ic('download')} PNG</button>
-        <button class="btn btn-primary" onclick="downloadPDF()">${ic('download')} PDF</button>
+        <button class="btn btn-cyan" onclick="downloadPNG()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> PNG</button>
+        <button class="btn btn-primary" onclick="downloadPDF()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> PDF</button>
       </div>
       <button class="btn btn-ghost" onclick="closeModal()">Fechar</button>
     `);
@@ -5623,42 +5540,16 @@ async function gerarCartao(provaId) {
 
 /* ─────────────────────────────────────────────────
    DOWNLOADS
-   No navegador: baixa via <a download> normalmente.
-   No APK: WebView não tem gerenciador de downloads, então
-   entregamos o arquivo em base64 para window.AndroidApp.salvarBase64,
-   que grava em Downloads/ e mostra o toast de sucesso (ver MainActivity.kt).
 ───────────────────────────────────────────────── */
-function _utf8ToBase64(str) {
-  const bytes = new TextEncoder().encode(str);
-  let bin = '';
-  bytes.forEach(b => bin += String.fromCharCode(b));
-  return btoa(bin);
-}
-
-/* dataUrl: string "data:<mime>;base64,<...>" (ex.: canvas.toDataURL(), pdf.output('datauristring')) */
-function baixarArquivo(dataUrl, filename) {
-  if (window.AndroidApp && window.AndroidApp.salvarBase64) {
-    const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
-    if (m) {
-      window.AndroidApp.salvarBase64(m[2], filename, m[1]);
-      toast(`${filename} salvo em Downloads`, 'success');
-      return;
-    }
-  }
-  const a = document.createElement('a');
-  a.href = dataUrl;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
 function downloadPNG() {
   const canvas = window._cartaoCanvas;
   const prova  = window._cartaoProva;
   if (!canvas) return;
   const slug = (prova.nome || 'cartao').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  baixarArquivo(canvas.toDataURL('image/png', 1.0), `cartao_${slug}.png`);
+  const a = document.createElement('a');
+  a.download = `cartao_${slug}.png`;
+  a.href = canvas.toDataURL('image/png', 1.0);
+  a.click();
   toast('PNG salvo!', 'success');
 }
 
@@ -5673,13 +5564,13 @@ function downloadPDF() {
   const [pW, pH] = land ? [210, 148] : [148, 210];
   pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, pW, pH);
   const slug = (prova.nome || 'cartao').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  baixarArquivo(pdf.output('datauristring'), `cartao_${slug}.pdf`);
+  pdf.save(`cartao_${slug}.pdf`);
   toast('PDF salvo!', 'success');
 }
 
 /* ═══════════════════════════════════════════════════════════════
    ETAPA 4 — CORREÇÃO DE GABARITOS POR CÂMERA
-   Fluxo: seleção aluno ${ic('arrow-right')} câmera ${ic('arrow-right')} captura ${ic('arrow-right')} OpenCV ${ic('arrow-right')} conferência ${ic('arrow-right')} salvar
+   Fluxo: seleção aluno → câmera → captura → OpenCV → conferência → salvar
 ═══════════════════════════════════════════════════════════════ */
 
 /* ── Estado da sessão de correção ── */
@@ -5732,7 +5623,7 @@ const corr = {
 .e4-frame.portrait { aspect-ratio: 105/148; }
 .e4-corner {
   position: absolute; width: 28px; height: 28px;
-  border-color: #00D4FF; border-style: solid;
+  border-color: #33BDF0; border-style: solid;
 }
 .e4-corner.tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
 .e4-corner.tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
@@ -5796,7 +5687,7 @@ const corr = {
 }
 .e4-proc-spin {
   width: 52px; height: 52px;
-  border: 3px solid rgba(0,180,216,.25); border-top-color: #00B4D8;
+  border: 3px solid rgba(0,168,232,.25); border-top-color: #00A8E8;
   border-radius: 50%; animation: spin .8s linear infinite;
 }
 .e4-proc-label { font-size: 15px; color: #fff; font-weight: 600; }
@@ -5805,7 +5696,7 @@ const corr = {
 /* Tela de conferência */
 .e4-conf-overlay {
   position: fixed; inset: 0; z-index: 500;
-  background: var(--navy); display: flex; flex-direction: column;
+  background: var(--bg); display: flex; flex-direction: column;
 }
 .e4-conf-header {
   padding: 14px 16px; padding-top: calc(14px + env(safe-area-inset-top,0));
@@ -5836,12 +5727,12 @@ const corr = {
 }
 .e4-q-row:active { background: var(--surface2); }
 .e4-q-row.ok     { border-color: rgba(0,200,130,.25); }
-.e4-q-row.dupla  { border-color: rgba(245,166,35,.5); background: rgba(245,166,35,.07); }
-.e4-q-row.vazia  { border-color: rgba(230,57,70,.4); background: rgba(230,57,70,.06); }
+.e4-q-row.dupla  { border-color: rgba(253,185,19,.5); background: rgba(253,185,19,.07); }
+.e4-q-row.vazia  { border-color: rgba(227,27,35,.4); background: rgba(227,27,35,.06); }
 .e4-q-row.anulada{ border-color: var(--border2); opacity: .6; }
-.e4-q-row.revisada{ border-color: rgba(0,180,216,.4); }
+.e4-q-row.revisada{ border-color: rgba(0,168,232,.4); }
 .e4-q-num  { font-family: var(--mono); font-size: 12px; color: var(--text-dim); width: 22px; flex-shrink: 0; }
-.e4-q-gab  { width: 24px; height: 24px; border-radius: 50%; background: rgba(0,180,216,.15); border: 1.5px solid var(--cyan); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: var(--cyan); flex-shrink: 0; }
+.e4-q-gab  { width: 24px; height: 24px; border-radius: 50%; background: rgba(0,168,232,.15); border: 1.5px solid var(--cyan); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: var(--cyan); flex-shrink: 0; }
 .e4-q-det  { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0; }
 .e4-q-det.ok    { background: var(--green); color: #000; }
 .e4-q-det.wrong { background: var(--red); color: #fff; }
@@ -5857,7 +5748,7 @@ const corr = {
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom,0px));
   display: flex; flex-direction: column; gap: 8px;
   border-top: 1px solid var(--border2); flex-shrink: 0;
-  background: var(--navy);
+  background: var(--bg);
 }
 .e4-nota-badge {
   display: flex; align-items: center; justify-content: center;
@@ -5891,9 +5782,9 @@ const corr = {
   cursor: pointer; transition: all .15s; -webkit-tap-highlight-color: transparent;
 }
 .e4-alt-btn:active { transform: scale(.9); }
-.e4-alt-btn.detected { border-color: var(--yellow); color: var(--yellow); background: rgba(245,166,35,.1); }
-.e4-alt-btn.correta  { border-color: var(--cyan); color: var(--cyan); background: rgba(0,180,216,.1); }
-.e4-alt-btn.anular   { border-color: var(--red); color: var(--red); background: rgba(230,57,70,.1); min-width: 100%; max-width: none; height: 40px; border-radius: var(--r-md); font-size: 13px; }
+.e4-alt-btn.detected { border-color: var(--yellow); color: var(--yellow); background: rgba(253,185,19,.1); }
+.e4-alt-btn.correta  { border-color: var(--cyan); color: var(--cyan); background: rgba(0,168,232,.1); }
+.e4-alt-btn.anular   { border-color: var(--red); color: var(--red); background: rgba(227,27,35,.1); min-width: 100%; max-width: none; height: 40px; border-radius: var(--r-md); font-size: 13px; }
   `;
   document.head.appendChild(style);
 })();
@@ -6005,7 +5896,7 @@ function selecionarAluno(alunoId, rowEl) {
     el.style.background  = 'var(--surface)';
   });
   rowEl.style.borderColor = 'var(--cyan)';
-  rowEl.style.background  = 'rgba(0,180,216,.08)';
+  rowEl.style.background  = 'rgba(0,168,232,.08)';
 
   setTimeout(() => {
     closeModal();
@@ -6028,10 +5919,10 @@ function abrirCamera() {
     <canvas id="e4-canvas"></canvas>
 
     <div class="e4-cam-top">
-      <div class="e4-cam-close" onclick="fecharCamera()">${ic('x')}</div>
+      <div class="e4-cam-close" onclick="fecharCamera()">✕</div>
       <div class="e4-cam-info">
         <div class="e4-cam-prova">${escapeHtml(corr.prova.nome)}</div>
-        <div class="e4-cam-aluno">${ic('map-pin')} ${escapeHtml(corr.aluno.nome)}</div>
+        <div class="e4-cam-aluno"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ${escapeHtml(corr.aluno.nome)}</div>
       </div>
     </div>
 
@@ -6047,14 +5938,14 @@ function abrirCamera() {
 
     <div class="e4-cam-bar">
       <div class="e4-cam-side" onclick="fecharCamera()">
-        <div class="e4-cam-side-btn">${ic('x')}</div>
+        <div class="e4-cam-side-btn">✕</div>
         <div class="e4-cam-side-lbl">Cancelar</div>
       </div>
       <div class="e4-shutter" onclick="fotografar()">
         <div class="e4-shutter-inner"></div>
       </div>
       <div class="e4-cam-side" onclick="trocarCamera()">
-        <div class="e4-cam-side-btn">${ic('refresh-cw')}</div>
+        <div class="e4-cam-side-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></div>
         <div class="e4-cam-side-lbl">Girar</div>
       </div>
     </div>
@@ -6409,8 +6300,8 @@ function mostrarErroProcessamento(msg) {
     <div class="modal-handle"></div>
     <div class="modal-title" style="color:var(--red)">Não consegui ler o cartão</div>
     <div style="font-size:13px;color:var(--text-muted);line-height:1.6">${escapeHtml(msg)}</div>
-    <div style="padding:12px;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);border-radius:10px;font-size:13px;color:var(--yellow);line-height:1.5">
-      ${ic('lightbulb')} <strong>Dicas:</strong> iluminação uniforme, cartão completamente dentro do guia, câmera estabilizada.
+    <div style="padding:12px;background:rgba(253,185,19,.1);border:1px solid rgba(253,185,19,.3);border-radius:10px;font-size:13px;color:var(--yellow);line-height:1.5">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.9V17h8v-2.1A7 7 0 0 0 12 2z"/></svg> <strong>Dicas:</strong> iluminação uniforme, cartão completamente dentro do guia, câmera estabilizada.
     </div>
     <button class="btn btn-cyan" onclick="closeModal();abrirCamera()">Tentar novamente</button>
     <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
@@ -6453,7 +6344,7 @@ function mostrarConferencia(warpedCanvas, resultado) {
   const header = document.createElement('div');
   header.className = 'e4-conf-header';
   header.innerHTML = `
-    <div class="wizard-back-btn" onclick="descartarConferencia()">${ic('arrow-left')}</div>
+    <div class="wizard-back-btn" onclick="descartarConferencia()">←</div>
     <div>
       <div class="e4-conf-title">${escapeHtml(corr.aluno.nome)}</div>
       <div class="e4-conf-sub">${escapeHtml(prova.nome)} · Confira e corrija se necessário</div>
@@ -6508,13 +6399,13 @@ function renderQList() {
     if (anulada) {
       status = 'anulada'; detClass = 'anulada'; detLabel = '—'; rowClass = 'anulada'; warnIcon = '';
     } else if (revisada !== undefined) {
-      status = 'revisada'; detClass = 'revisada'; detLabel = revisada === 'ANULADA' ? `${ic('x')}` : revisada; rowClass = 'revisada'; warnIcon = ic('pencil');
+      status = 'revisada'; detClass = 'revisada'; detLabel = revisada === 'ANULADA' ? '✕' : revisada; rowClass = 'revisada'; warnIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
     } else if (dupla) {
-      status = 'dupla'; detClass = 'dupla'; detLabel = resp || '?'; rowClass = 'dupla'; warnIcon = ic('alert-triangle');
+      status = 'dupla'; detClass = 'dupla'; detLabel = resp || '?'; rowClass = 'dupla'; warnIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
     } else if (!resp) {
-      status = 'vazia'; detClass = 'vazia'; detLabel = '·'; rowClass = 'vazia'; warnIcon = ic('help-circle');
+      status = 'vazia'; detClass = 'vazia'; detLabel = '·'; rowClass = 'vazia'; warnIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
     } else if (resp === gabarito) {
-      status = 'ok'; detClass = 'ok'; detLabel = resp; rowClass = 'ok'; warnIcon = ic('check');
+      status = 'ok'; detClass = 'ok'; detLabel = resp; rowClass = 'ok'; warnIcon = '✓';
     } else {
       status = 'wrong'; detClass = 'wrong'; detLabel = resp; rowClass = ''; warnIcon = '';
     }
@@ -6572,9 +6463,9 @@ function renderNota() {
       <div class="e4-nota-max">/ ${max.toFixed(1)}</div>
     </div>
     ${disciplinasHtml}
-    ${avisos > 0 ? `<div style="font-size:12px;color:var(--yellow);text-align:center;line-height:1.5">${ic('alert-triangle')} ${duplas > 0 ? duplas+' dupla'+( duplas>1?'s':'')+' marcação' : ''} ${duplas>0&&vazias>0?'· ':''} ${vazias > 0 ? vazias+' questão'+( vazias>1?'ões':'')+' em branco' : ''} — toque para resolver</div>` : ''}
+    ${avisos > 0 ? `<div style="font-size:12px;color:var(--yellow);text-align:center;line-height:1.5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ${duplas > 0 ? duplas+' dupla'+( duplas>1?'s':'')+' marcação' : ''} ${duplas>0&&vazias>0?'· ':''} ${vazias > 0 ? vazias+' questão'+( vazias>1?'ões':'')+' em branco' : ''} — toque para resolver</div>` : ''}
     <button class="btn btn-cyan" ${avisos>0?'style="opacity:.7"':''} onclick="confirmarSalvar()">
-      ${avisos > 0 ? `${ic('alert-triangle')} Salvar mesmo assim` : `${ic('check')} Confirmar e salvar`}
+      ${avisos > 0 ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Salvar mesmo assim' : '✓ Confirmar e salvar'}
     </button>
     <button class="btn btn-ghost" onclick="descartarConferencia()">Descartar</button>
   `;
@@ -6653,8 +6544,8 @@ function abrirSeletorAlt(q) {
       <div class="e4-alt-title">Questão ${q}</div>
       <div class="e4-alt-sub">Gabarito: <strong style="color:var(--cyan)">${gabarito || '—'}</strong> · Detectada: <strong style="color:var(--yellow)">${detectada || 'nenhuma'}</strong>${revisada !== undefined ? ` · Revisão: <strong style="color:var(--cyan)">${revisada === 'ANULADA' ? 'Anulada' : revisada}</strong>` : ''}</div>
       <div class="e4-alt-grid">${btns}</div>
-      <div class="e4-alt-btn anular" onclick="aplicarRevisao(${q},'ANULADA')">${ic('x')} Anular esta questão</div>
-      ${revisada !== undefined ? `<div class="e4-alt-btn" style="border-color:var(--border);color:var(--text-muted);margin-top:8px;min-width:100%;max-width:none;height:40px;border-radius:var(--r-md);font-size:13px" onclick="removerRevisao(${q})">${ic('undo-2')} Usar resultado detectado</div>` : ''}
+      <div class="e4-alt-btn anular" onclick="aplicarRevisao(${q},'ANULADA')">✕ Anular esta questão</div>
+      ${revisada !== undefined ? `<div class="e4-alt-btn" style="border-color:var(--border);color:var(--text-muted);margin-top:8px;min-width:100%;max-width:none;height:40px;border-radius:var(--r-md);font-size:13px" onclick="removerRevisao(${q})">↩ Usar resultado detectado</div>` : ''}
     </div>
   `;
   document.body.appendChild(sheet);
@@ -6728,14 +6619,14 @@ function desenharOverlayBolhas(ctx, resultado) {
           ctx.beginPath();
           ctx.arc(bx, cy, bRpx * 0.85, 0, Math.PI * 2);
           if (isRev) {
-            ctx.fillStyle = 'rgba(0,180,216,0.55)';
-            ctx.strokeStyle = '#00D4FF';
+            ctx.fillStyle = 'rgba(0,168,232,0.55)';
+            ctx.strokeStyle = '#33BDF0';
           } else if (isDupla) {
-            ctx.fillStyle = 'rgba(245,166,35,0.5)';
-            ctx.strokeStyle = '#F5A623';
+            ctx.fillStyle = 'rgba(253,185,19,0.5)';
+            ctx.strokeStyle = '#FDB913';
           } else {
-            ctx.fillStyle = 'rgba(0,180,216,0.45)';
-            ctx.strokeStyle = '#00B4D8';
+            ctx.fillStyle = 'rgba(0,168,232,0.45)';
+            ctx.strokeStyle = '#00A8E8';
           }
           ctx.lineWidth = bRpx * 0.2;
           ctx.fill();
@@ -6876,11 +6767,11 @@ async function executarSalvar() {
     }
 
     document.getElementById('e4-conf-overlay')?.remove();
-    toast(`${ic('check')} Nota: ${nota.toFixed(1)} / ${notaMax.toFixed(1)} — salvo!`, 'success');
+    toast(`✓ Nota: ${nota.toFixed(1)} / ${notaMax.toFixed(1)} — salvo!`, 'success');
 
   } catch (e) {
     toast('Erro ao salvar: ' + e.message, 'error');
-    if (btn) { btn.disabled = false; btn.innerHTML = `${ic('check')} Confirmar e salvar`; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '✓ Confirmar e salvar'; }
   }
 }
 
@@ -6914,7 +6805,7 @@ async function abrirRecalculoPesos(provaId) {
       Só quem realmente mudar de nota é regravado.
     </div>
     <button class="btn btn-cyan" id="btn-recalc-confirmar" onclick="executarRecalculoPesos('${provaId}')">
-      ${ic('refresh-cw')} Recalcular agora
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Recalcular agora
     </button>
     <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Cancelar</button>
   `);
@@ -6963,8 +6854,8 @@ async function executarRecalculoPesos(provaId) {
 
 /* ═══════════════════════════════════════════════════════════════
    ETAPA 7 — EXPORTAÇÃO PARA NOTA MESTRA (backup JSON por turma)
-   Fluxo: escolher turma ${ic('arrow-right')} escolher prova já corrigida ${ic('arrow-right')} escolher
-   se vira "Prova da unidade" ou "Atividade" ${ic('arrow-right')} gerar e baixar o
+   Fluxo: escolher turma → escolher prova já corrigida → escolher
+   se vira "Prova da unidade" ou "Atividade" → gerar e baixar o
    JSON no mesmo formato do backup completo de turma do Nota Mestra
    (setup + grades.atividades/prova/extras/uiConfig), preenchendo
    apenas o campo escolhido — o resto fica vazio, pronto pra restaurar.
@@ -7210,8 +7101,15 @@ function gerarJSONExportacaoNM() {
   const discLabel = discNome || prova.disciplina || '';
   const nomeArquivo = `Turma_${slug(turmaL)}_${slug(serie)}_${slug(discLabel)}_${prova.bimestre||'1'}_Bimestre_${slug(nivel)}_BKP.json`;
 
-  const jsonStr = JSON.stringify(backup, null, 2);
-  baixarArquivo(`data:application/json;base64,${_utf8ToBase64(jsonStr)}`, nomeArquivo);
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const aTag = document.createElement('a');
+  aTag.href = url;
+  aTag.download = nomeArquivo;
+  document.body.appendChild(aTag);
+  aTag.click();
+  aTag.remove();
+  URL.revokeObjectURL(url);
 
   closeModal();
   toast('JSON exportado!', 'success');
@@ -7374,13 +7272,13 @@ async function abrirResultadosProva(provaId) {
     </div>
     <div style="padding:0 16px 32px">
       <button class="btn btn-primary" style="width:100%" onclick="abrirImportacaoNM('${p.id}')">
-        ${ic('upload')} Importar para o Nota Mestra
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Importar para o Nota Mestra
       </button>
       <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="abrirRecalculoPesos('${p.id}')">
-        ${ic('refresh-cw')} Recalcular com pesos atuais
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Recalcular com pesos atuais
       </button>
       <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="exportarResultadosPDF()">
-        ${ic('printer')} Exportar PDF
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Exportar PDF
       </button>
       <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:6px">
         Salvar como PDF · funciona no app Android e no navegador
@@ -7471,7 +7369,7 @@ async function renderResultadosProva() {
   if (!alunos.length && !corrigidos.length) {
     listEl.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">${ic('inbox')}</div>
+        <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>
         <div class="empty-title">Sem alunos</div>
         <div class="empty-sub">Cadastre alunos na turma para visualizar resultados.</div>
       </div>`;
@@ -7494,7 +7392,7 @@ async function renderResultadosProva() {
     if (r) {
       const cls = classNota(r.nota||0, r.notaMax||1);
       const btnExcluir = podeExcluirCorrecao(prova, r)
-        ? `<button class="icon-btn danger" title="Excluir correção" onclick="event.stopPropagation();excluirCorrecao('${r.id}','${escapeHtml(a.nome).replace(/'/g,"\\'")}','${provaId}')">${ic('trash-2')}</button>`
+        ? `<button class="icon-btn danger" title="Excluir correção" onclick="event.stopPropagation();excluirCorrecao('${r.id}','${escapeHtml(a.nome).replace(/'/g,"\\'")}','${provaId}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>`
         : '';
       return `
         <div class="res-row" onclick="abrirDetalheResultado('${r.id}')" style="display:flex;align-items:center;gap:10px">
@@ -7608,7 +7506,7 @@ async function abrirDetalheResultado(resultadoId) {
     else if (d.status === 'correta') cellCls = 'ok';
     else if (d.status === 'errada') cellCls = 'bad';
     const resp = d.resp && d.resp !== 'ANULADA' ? d.resp : '—';
-    const sub = d.status === 'errada' && gabarito ? `<div style="font-size:9px;color:var(--text-muted);margin-top:2px">${ic('check')} ${gabarito}</div>` : '';
+    const sub = d.status === 'errada' && gabarito ? `<div style="font-size:9px;color:var(--text-muted);margin-top:2px">✓ ${gabarito}</div>` : '';
     cells += `<div class="res-q-cell ${cellCls}"><div class="q-num">${q}</div><div class="q-resp">${resp}</div>${sub}</div>`;
   }
 
@@ -7619,7 +7517,7 @@ async function abrirDetalheResultado(resultadoId) {
     </div>
     <div style="padding:0 16px 8px">
       <div style="font-size:13px;color:var(--text-muted)">${escapeHtml(r.provaNome||'')}</div>
-      ${r.multidisciplinar ? `<span class="badge badge-cyan" style="margin-top:4px;display:inline-flex">${ic('book-copy')} Multidisciplinar</span>` : ''}
+      ${r.multidisciplinar ? '<span class="badge badge-cyan" style="margin-top:4px;display:inline-flex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg> Multidisciplinar</span>' : ''}
     </div>
     <div class="res-summary">
       <div class="stat-card"><div class="stat-label">Nota</div><div class="stat-value ${cls==='ok'?'cyan':cls==='warn'?'yellow':''}" ${cls==='fail'?'style="color:#e31b23"':''}>${fmtNota(r.nota||0)}</div></div>
@@ -7627,10 +7525,10 @@ async function abrirDetalheResultado(resultadoId) {
       <div class="stat-card"><div class="stat-label">Acertos</div><div class="stat-value cyan">${acertos}</div></div>
     </div>
     <div style="padding:0 16px 8px;display:flex;gap:6px;flex-wrap:wrap">
-      <span class="badge badge-cyan">${ic('check')} ${acertos} acerto${acertos===1?'':'s'}</span>
-      <span class="badge" style="background:rgba(227,27,35,.15);color:#e31b23">${ic('x-circle')} ${erros} erro${erros===1?'':'s'}</span>
-      ${brancos ? `<span class="badge" style="background:var(--surface2);color:var(--text-dim)">${ic('circle')} ${brancos} branco${brancos===1?'':'s'}</span>` : ''}
-      ${anuladas ? `<span class="badge badge-yellow">${ic('ban')} ${anuladas} anulada${anuladas===1?'':'s'}</span>` : ''}
+      <span class="badge badge-cyan">✓ ${acertos} acerto${acertos===1?'':'s'}</span>
+      <span class="badge" style="background:rgba(227,27,35,.15);color:#e31b23">✗ ${erros} erro${erros===1?'':'s'}</span>
+      ${brancos ? `<span class="badge" style="background:var(--surface2);color:var(--text-dim)">○ ${brancos} branco${brancos===1?'':'s'}</span>` : ''}
+      ${anuladas ? `<span class="badge badge-yellow">⊘ ${anuladas} anulada${anuladas===1?'':'s'}</span>` : ''}
     </div>
     ${ r.multidisciplinar && r.notasPorDisciplina && Object.keys(r.notasPorDisciplina).length > 0 ? `
     <div class="dash-section-title">Nota por disciplina</div>
@@ -7696,7 +7594,7 @@ async function abrirBoletimAluno(alunoId) {
   if (!meus.length) {
     secoes = `
       <div class="empty-state">
-        <div class="empty-icon">${ic('clipboard-list')}</div>
+        <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="6" y="4" width="12" height="18" rx="2"/></svg></div>
         <div class="empty-title">Sem correções</div>
         <div class="empty-sub">Este aluno ainda não tem provas corrigidas.</div>
       </div>`;
@@ -7763,7 +7661,18 @@ async function abrirBoletimAluno(alunoId) {
   setTimeout(tryPatch, 2000);
 })();
 
-/* A limpeza de cacheRes ao sair já é feita dentro de signOut() (ver AUTH). */
+/* ─────────────────────────────────────────
+   HOOK: invalida cacheRes na troca de escola
+───────────────────────────────────────── */
+(function patchSignOutForRes(){
+  if (typeof signOut === 'function') {
+    const _orig = signOut;
+    signOut = async function() {
+      cacheRes.items = null;
+      return _orig();
+    };
+  }
+})();
 </script>
 
 
@@ -7816,9 +7725,9 @@ async function abrirBoletimAluno(alunoId) {
   padding: 8px 10px; border-radius: var(--r-sm);
   margin-bottom: 6px; font-size: 13px;
 }
-.rel-q-destaque.low  { background: rgba(230,57,70,.12);  border-left: 3px solid #e31b23; }
+.rel-q-destaque.low  { background: rgba(227,27,35,.12);  border-left: 3px solid #e31b23; }
 .rel-q-destaque.mid  { background: rgba(253,185,19,.12); border-left: 3px solid #fdb913; }
-.rel-q-destaque.high { background: rgba(0,180,216,.10);  border-left: 3px solid var(--cyan); }
+.rel-q-destaque.high { background: rgba(0,168,232,.10);  border-left: 3px solid var(--cyan); }
 .rel-q-num  { font-weight: 700; font-family: var(--mono); min-width: 28px; }
 .rel-q-pct  { margin-left: auto; font-weight: 700; font-family: var(--mono); }
 .rel-q-bar-wrap { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; }
@@ -8007,13 +7916,13 @@ function relRender(bodyEl) {
         <div class="rl">Menor nota</div>
       </div>
     </div>
-    ${total === 0 ? `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">${ic('inbox')}</div><div class="empty-title">Nenhuma correção ainda</div><div class="empty-sub">Corrija provas para ver o relatório.</div></div>` : ''}
+    ${total === 0 ? `<div class="empty-state" style="margin:0 16px"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div><div class="empty-title">Nenhuma correção ainda</div><div class="empty-sub">Corrija provas para ver o relatório.</div></div>` : ''}
   `;
 
   // Destaques: 3 piores questões
   const pioresHtml = piores3.length && total > 0 ? `
     <div class="rel-card">
-      <div class="rel-card-title">${ic('alert-triangle')} Questões com menor acerto</div>
+      <div class="rel-card-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Questões com menor acerto</div>
       ${piores3.map(({ q, pct }) => `
         <div class="rel-q-destaque low">
           <span class="rel-q-num">Q${q}</span>
@@ -8026,10 +7935,10 @@ function relRender(bodyEl) {
 
   // ── Abas ──
   const abas = [
-    { id: 'questoes', label: `${ic('bar-chart-3')} Por questão` },
-    { id: 'distribuicao', label: `${ic('trending-down')} Distribuição` },
-    { id: 'ranking', label: `${ic('trophy')} Ranking` },
-    { id: 'distratores', label: `${ic('search')} Distratores` },
+    { id: 'questoes', label: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Por questão' },
+    { id: 'distribuicao', label: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg> Distribuição' },
+    { id: 'ranking', label: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M5 4H3v2a4 4 0 0 0 4 4"/><path d="M19 4h2v2a4 4 0 0 1-4 4"/></svg> Ranking' },
+    { id: 'distratores', label: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Distratores' },
   ];
 
   const tabsHtml = `
@@ -8073,12 +7982,12 @@ function relRender(bodyEl) {
 
   } else if (_rel.abaAtiva === 'ranking') {
     abaHtml = ranking.length === 0
-      ? `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">${ic('trophy')}</div><div class="empty-title">Sem dados</div></div>`
+      ? `<div class="empty-state" style="margin:0 16px"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M5 4H3v2a4 4 0 0 0 4 4"/><path d="M19 4h2v2a4 4 0 0 1-4 4"/></svg></div><div class="empty-title">Sem dados</div></div>`
       : `<div class="rel-card" style="padding:0 0 4px">
           <div style="padding:12px 16px 0"><div class="rel-card-title">${multiplasTurmasRel && _rel.filtroTurma==='all' ? 'Ranking geral' : 'Ranking da turma'}</div></div>
           ${ranking.map((r,i) => {
             const cls = r.nota >= 7 ? 'var(--cyan)' : r.nota >= 5 ? '#fdb913' : '#e31b23';
-            const medal = i===0?ic('medal','gold'):i===1?ic('medal','silver'):i===2?ic('medal','bronze'):'';
+            const medal = i===0?'<svg viewBox="0 0 24 24" fill="none" stroke="#D4A017" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>':i===1?'<svg viewBox="0 0 24 24" fill="none" stroke="#9AA4AD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>':i===2?'<svg viewBox="0 0 24 24" fill="none" stroke="#B0703A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>':'';
             const mostrarTurma = multiplasTurmasRel && _rel.filtroTurma==='all' && r.turmaNome;
             return `
               <div class="rel-rank-row">
@@ -8091,7 +8000,7 @@ function relRender(bodyEl) {
 
   } else if (_rel.abaAtiva === 'distratores') {
     if (total === 0) {
-      abaHtml = `<div class="empty-state" style="margin:0 16px"><div class="empty-icon">${ic('search')}</div><div class="empty-title">Sem dados</div></div>`;
+      abaHtml = `<div class="empty-state" style="margin:0 16px"><div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="empty-title">Sem dados</div></div>`;
     } else {
       const validQs = Array.from({length: nQ}, (_,i)=>i+1).filter(q => !p.anuladas?.[q]);
       abaHtml = `
@@ -8135,7 +8044,7 @@ function relRender(bodyEl) {
     + (total > 0 ? `
       <div style="padding:16px 16px 32px">
         <button class="btn btn-primary" style="width:100%" onclick="exportarRelatorioPDF()">
-          ${ic('printer')} Exportar PDF
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Exportar PDF
         </button>
         <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:6px">
           Salvar como PDF · funciona no app Android e no navegador
@@ -8146,7 +8055,7 @@ function relRender(bodyEl) {
   if (_rel.abaAtiva === 'distribuicao' && total > 0) {
     const canvas = document.getElementById('chart-histo');
     if (canvas && window.Chart) {
-      const cores = histo.map((_,i) => i < 2 ? '#e31b23' : i < 3 ? '#fdb913' : 'rgba(0,180,216,0.85)');
+      const cores = histo.map((_,i) => i < 2 ? '#e31b23' : i < 3 ? '#fdb913' : 'rgba(0,168,232,0.85)');
       const chart = new Chart(canvas, {
         type: 'bar',
         data: {
@@ -8268,7 +8177,7 @@ function _lgPdfCabecalho(prova, subtitulo, turmaFiltro){
   }
   return `
   <div class="pe-faixa">
-    <h1>Correção <span>Mestra</span></h1>
+    <h1>Leitor de <span>Gabaritos</span></h1>
     <p>${subtitulo}</p>
   </div>
   <div class="pe-tricolor"><span class="y"></span><span class="r"></span><span class="c"></span></div>
@@ -8282,7 +8191,7 @@ function _lgPdfCabecalho(prova, subtitulo, turmaFiltro){
 
 function _lgPdfRodape(){
   return `<div class="rodape">
-    <div>Emitido em ${_lgPdfHoje()} · Correção Mestra</div>
+    <div>Emitido em ${_lgPdfHoje()} · Leitor de Gabaritos</div>
     <div class="ass">Assinatura do(a) professor(a)</div>
   </div>`;
 }
@@ -8299,12 +8208,9 @@ function _lgAbrirJanelaImpressao(html, orientacao){
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Correção Mestra — Impressão</title>
+<title>Leitor de Gabaritos — Impressão</title>
 ${style}
-<style>body{padding:10mm 8mm;} .no-print{display:none!important;} @media print{.no-print{display:none!important;}}
-[data-lucide] svg{width:1em;height:1em;stroke-width:2px;stroke:currentColor;vertical-align:-0.15em;}</style>
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"><\/script>
-<script>function ic(name){return '<i data-lucide="'+name+'"></i>';}<\/script>
+<style>body{padding:10mm 8mm;} .no-print{display:none!important;} @media print{.no-print{display:none!important;}}</style>
 </head>
 <body class="${o}">
 ${html}
@@ -8335,9 +8241,9 @@ ${html}
     overlay.id = 'lg-print-overlay';
     overlay.innerHTML = `
       <div class="lg-bar">
-        <span>${ic('file-text')} Prévia — pronto para imprimir</span>
-        <button type="button" id="lg-close-btn" class="cinza">${ic('x')} Fechar</button>
-        <button type="button" id="lg-print-btn">${ic('printer')} Salvar PDF</button>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Prévia — pronto para imprimir</span>
+        <button type="button" id="lg-close-btn" class="cinza">✕ Fechar</button>
+        <button type="button" id="lg-print-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Salvar PDF</button>
       </div>
       <div id="lg-preview-scroll"><div id="lg-preview-page"></div></div>
     `;
@@ -8367,10 +8273,10 @@ ${html}
   /* ── Modo web: nova janela com auto-print ── */
   const fullHtml = buildFullHtml().replace('</body>', `
 <div class="no-print" style="position:fixed;top:10px;right:10px;display:flex;gap:8px;z-index:9999;">
-  <button onclick="window.print()" style="background:#0056b3;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem;">${ic('printer')} Imprimir / Salvar PDF</button>
-  <button onclick="window.close()" style="background:#6c757d;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem;">${ic('x')} Fechar</button>
+  <button onclick="window.print()" style="background:#0056b3;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Imprimir / Salvar PDF</button>
+  <button onclick="window.close()" style="background:#6c757d;color:#fff;border:none;padding:10px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem;">✕ Fechar</button>
 </div>
-<script>window.onload=function(){if(window.lucide)lucide.createIcons();setTimeout(function(){window.print();},500);};<\/script>
+<script>window.onload=function(){setTimeout(function(){window.print();},500);};<\/script>
 </body>`);
 
   const win = window.open('', '_blank', 'width=900,height=700');
@@ -8416,7 +8322,7 @@ function abrirSeletorTurmaPdfResultados(turmaIds) {
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Esta prova foi aplicada em mais de uma turma. Escolha o que deve sair no PDF.</div>
     <div class="aluno-item" style="border-radius:var(--r-md);border:1px solid var(--border2);margin-bottom:6px;background:var(--surface)"
          onclick="closeModal();_gerarResultadosPDF('all')">
-      <div class="aluno-avatar">${ic('clipboard-list')}</div>
+      <div class="aluno-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M9 2h6a1 1 0 0 1 1 1v2H8V3a1 1 0 0 1 1-1z"/><rect x="6" y="4" width="12" height="18" rx="2"/></svg></div>
       <div class="aluno-info"><div class="aluno-name">Todas as turmas juntas</div></div>
     </div>
     ${opcoes}
@@ -8533,7 +8439,7 @@ function abrirSeletorTurmaPdfRelatorio(turmaIds) {
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">Esta prova foi aplicada em mais de uma turma. Escolha o que deve sair no PDF.</div>
     <div class="aluno-item" style="border-radius:var(--r-md);border:1px solid var(--border2);margin-bottom:6px;background:var(--surface)"
          onclick="closeModal();_gerarRelatorioPDF('all')">
-      <div class="aluno-avatar">${ic('trending-up')}</div>
+      <div class="aluno-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
       <div class="aluno-info"><div class="aluno-name">Todas as turmas juntas</div></div>
     </div>
     ${opcoes}
@@ -8680,7 +8586,7 @@ async function _gerarRelatorioPDF(turmaFiltro){
         <tbody>
           ${ranking.map((r,i) => {
             const cls = r.nota>=7 ? 'aprov' : r.nota>=5 ? 'rec' : 'rep';
-            const medal = i===0?ic('medal','gold'):i===1?ic('medal','silver'):i===2?ic('medal','bronze'):('#'+(i+1));
+            const medal = i===0?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>':i===1?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>':i===2?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>':('#'+(i+1));
             return `<tr class="${cls}"><td class="num">${medal}</td><td class="aluno">${escapeHtml(r.nome)}</td>${mostrarTurmaRanking?`<td class="aluno">${escapeHtml(r.turmaNome||'—')}</td>`:''}<td class="num">${r.nota.toFixed(1)}</td></tr>`;
           }).join('')}
         </tbody>
