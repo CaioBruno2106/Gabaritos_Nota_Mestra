@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#002B5C">
-<title>Nota Mestra</title>
+<title>Correção Mestra</title>
 <!-- build: v7 (Etapa 7 — Exportação JSON para Nota Mestra, formato de backup por turma, prova ou atividade) -->
 <!-- build anterior: v7a (Etapa A — Arquivar provas · Excluir correções · Nota por disciplina na conferência) -->
 
@@ -1375,6 +1375,7 @@ async function abrirProva(id) {
       <div class="info-pill"><div class="info-pill-label">Soma pesos</div><div class="info-pill-value">${somaPesos.toFixed(2)}</div></div>
     </div>
 
+    <div class="desktop-only-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> A correção por foto do cartão-resposta funciona apenas no app do celular. Aqui no computador, use este espaço para gerar o cartão e ver os resultados.</div>
     <div class="dash-quick-actions" style="padding:0 16px 16px">
       <div class="quick-action" onclick="gerarCartao('${p.id}')">
         <div class="quick-action-icon yellow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-2px;flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
@@ -2702,61 +2703,120 @@ html, body {
 }
 .icon-btn:active { background: var(--surface2); }
 .icon-btn.danger:active { color: var(--red); }
+.desktop-only-hint { display: none; }
 
 /* ═══════════════════════════════════════════════
    VISUAL EM COMPUTADOR (telas largas)
-   O app é "mobile-first"; em telas grandes ele passa
-   a ser exibido como um cartão centralizado, no estilo
-   de um aparelho, sobre um fundo com a identidade PE —
-   em vez de esticar feio pela tela toda.
+   O app é "mobile-first"; em telas grandes a navegação
+   inferior vira uma barra lateral, o conteúdo usa o
+   espaço em largura, e o fluxo de câmera (que exige
+   celular) fica desativado — o foco no PC é cadastrar
+   escolas, turmas e provas.
 ═══════════════════════════════════════════════ */
 @media (min-width: 900px) {
   html, body {
     background:
-      radial-gradient(circle at 15% 12%, rgba(0,168,232,.10), transparent 42%),
-      radial-gradient(circle at 88% 82%, rgba(253,185,19,.08), transparent 42%),
-      linear-gradient(160deg, #eef2f7 0%, #dde5ee 55%, #d3dce8 100%);
+      radial-gradient(circle at 15% 12%, rgba(0,168,232,.07), transparent 42%),
+      radial-gradient(circle at 88% 88%, rgba(253,185,19,.05), transparent 42%),
+      linear-gradient(160deg, #eef2f7 0%, #dde5ee 100%);
   }
   body.dark-mode {
     background:
-      radial-gradient(circle at 15% 12%, rgba(0,168,232,.09), transparent 42%),
-      radial-gradient(circle at 88% 82%, rgba(253,185,19,.06), transparent 42%),
-      linear-gradient(160deg, #0a0f16 0%, #0d1622 55%, #0a1420 100%);
+      radial-gradient(circle at 15% 12%, rgba(0,168,232,.07), transparent 42%),
+      radial-gradient(circle at 88% 88%, rgba(253,185,19,.04), transparent 42%),
+      linear-gradient(160deg, #0a0f16 0%, #0a1420 100%);
   }
 
-  #screen-splash, #screen-login, #screen-onboarding, #screen-app,
-  .modal-overlay, .e4-overlay, .e4-conf-overlay, .e4-alt-modal, .e4-processing {
-    left: 50% !important;
-    right: auto !important;
-    top: 50% !important;
-    bottom: auto !important;
-    transform: translate(-50%, -50%) !important;
-    width: 430px !important;
-    height: 900px !important;
-    max-height: 94vh !important;
-  }
-  .e4-processing { transform: none !important; position: absolute !important; inset: 0 !important; left:0 !important; top:0 !important; width:100% !important; height:100% !important; }
-
-  #screen-splash, #screen-login, #screen-onboarding, #screen-app {
-    border-radius: 30px !important;
+  /* Telas de tela cheia (login/onboarding/app) passam a ocupar
+     uma área central com largura máxima, em vez de esticar 100%. */
+  #screen-login, #screen-onboarding, #screen-app {
+    left: 50% !important; right: auto !important;
+    transform: translateX(-50%) !important;
+    width: min(1180px, 96vw) !important;
+    top: 20px !important; bottom: 20px !important;
+    border-radius: 20px !important;
     overflow: hidden !important;
-    box-shadow:
-      0 40px 90px rgba(0,20,50,.32),
-      0 0 0 8px #0b1420,
-      0 0 0 11px #263548;
+    box-shadow: 0 24px 70px rgba(0,20,50,.20);
   }
-  .modal-overlay, .e4-alt-modal { border-radius: 0 !important; }
-  .e4-overlay, .e4-conf-overlay { border-radius: 30px !important; overflow: hidden !important; }
+  #screen-splash { display: none !important; }
+  #screen-onboarding { width: min(640px, 92vw) !important; }
 
-  /* Selo discreto do app atrás do cartão, para preencher o fundo */
-  body::before {
-    content: 'NOTA MESTRA · CORREÇÃO';
-    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
-    font-family: var(--font); font-size: 12px; font-weight: 700;
-    letter-spacing: .18em; color: rgba(0,43,92,.28);
-    pointer-events: none; z-index: 0;
+  /* ── LOGIN em duas colunas ── */
+  #screen-login { display: flex !important; flex-direction: row !important; overflow: hidden !important; }
+  .login-hero {
+    flex: 1 1 46%; min-height: auto !important;
+    border-radius: 0 !important;
   }
-  body.dark-mode::before { color: rgba(255,255,255,.12); }
+  .login-card {
+    flex: 1 1 54%; border-radius: 0 !important; border-top: none !important;
+    justify-content: center; border-left: 1px solid var(--border2);
+  }
+
+  /* ── APP PRINCIPAL: barra lateral no lugar da barra inferior ── */
+  #screen-app {
+    display: grid !important;
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: 56px 1fr;
+    grid-template-areas: "sidebar topbar" "sidebar content";
+  }
+  .topbar {
+    grid-area: topbar; position: relative;
+    padding-top: 0 !important;
+  }
+  .topbar-brand-line { display: none; }
+  .app-content {
+    grid-area: content; padding-bottom: 24px !important;
+    display: flex; justify-content: center;
+  }
+  .app-content > * { width: 100%; max-width: 960px; }
+
+  .bottom-nav {
+    grid-area: sidebar; position: relative !important;
+    height: 100% !important; width: 240px;
+    flex-direction: column; align-items: stretch; justify-content: flex-start;
+    padding: 14px 10px; gap: 2px;
+    background: var(--navy); border-top: none;
+    box-shadow: none;
+  }
+  .nav-item {
+    flex: none; height: 44px; flex-direction: row; justify-content: flex-start;
+    gap: 12px; padding: 0 14px; border-radius: var(--r-md);
+  }
+  .nav-item svg { width: 19px; height: 19px; color: rgba(255,255,255,.55); }
+  .nav-item span { font-size: 13px; color: rgba(255,255,255,.55); font-weight: 600; }
+  .nav-item:hover { background: rgba(255,255,255,.06); }
+  .nav-item.active { background: rgba(0,168,232,.16); }
+  .nav-item.active svg, .nav-item.active span { color: var(--cyan); }
+  .nav-item.active::after { display: none; }
+
+  /* Listas (turmas/provas/alunos) em grade, aproveitando a largura */
+  .list-wrap {
+    display: grid !important; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    align-items: start; gap: 12px; padding: 0 24px 24px;
+  }
+  .dash-quick-actions { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .dash-stats { grid-template-columns: repeat(4, 1fr) !important; }
+
+  /* Ações que dependem de câmera/celular ficam desativadas no PC */
+  [onclick*="iniciarCorrecao"], [onclick*="abrirCamera"] {
+    opacity: .45; cursor: not-allowed; filter: grayscale(.4);
+  }
+
+  /* Modais e diálogos continuam centralizados, sem largura de celular */
+  .modal-overlay { align-items: center !important; }
+  .modal { width: min(520px, 90vw) !important; border-radius: 20px !important; }
+  .modal-handle { display: none; }
+
+  /* Aviso de recurso indisponível no desktop */
+  .desktop-only-hint {
+    display: flex !important; align-items: center; gap: 10px;
+    background: rgba(253,185,19,.10); border: 1px solid rgba(253,185,19,.35);
+    color: var(--text); border-radius: var(--r-md); padding: 10px 14px;
+    font-size: 12.5px; margin: 0 24px 12px;
+  }
+}
+@media (max-width: 899px) {
+  .desktop-only-hint { display: none !important; }
 }
 
 </style>
@@ -3214,6 +3274,9 @@ function toggleDarkMode() {
   var isDark = document.body.classList.toggle('dark-mode');
   syncDarkModeBtn();
   try { localStorage.setItem('cm_dark', isDark ? '1' : '0'); } catch(e) {}
+}
+function isDesktopMode() {
+  try { return window.matchMedia('(min-width: 900px)').matches; } catch(e) { return false; }
 }
 (function() {
   try {
@@ -5849,6 +5912,10 @@ const corr = {
    PASSO 1 — SELEÇÃO DE ALUNO
 ══════════════════════════════════════ */
 async function iniciarCorrecao(provaId) {
+  if (isDesktopMode()) {
+    toast('Correção por foto disponível apenas no app do celular. No computador, use este espaço para cadastrar escolas, turmas e provas.', 'error');
+    return;
+  }
   await loadCache();
   const prova = cache.provas?.find(p => p.id === provaId);
   if (!prova) { toast('Prova não encontrada', 'error'); return; }
@@ -5964,6 +6031,10 @@ function selecionarAluno(alunoId, rowEl) {
    PASSO 2 — CÂMERA
 ══════════════════════════════════════ */
 function abrirCamera() {
+  if (isDesktopMode()) {
+    toast('Correção por foto disponível apenas no app do celular.', 'error');
+    return;
+  }
   const isLandscape = calcLayout(corr.prova.numQuestoes, corr.prova.numAlternativas || 5).isLandscape;
   corr.layout = calcLayout(corr.prova.numQuestoes, corr.prova.numAlternativas || 5);
 
