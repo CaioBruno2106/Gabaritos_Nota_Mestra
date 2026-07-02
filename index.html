@@ -2703,6 +2703,62 @@ html, body {
 .icon-btn:active { background: var(--surface2); }
 .icon-btn.danger:active { color: var(--red); }
 
+/* ═══════════════════════════════════════════════
+   VISUAL EM COMPUTADOR (telas largas)
+   O app é "mobile-first"; em telas grandes ele passa
+   a ser exibido como um cartão centralizado, no estilo
+   de um aparelho, sobre um fundo com a identidade PE —
+   em vez de esticar feio pela tela toda.
+═══════════════════════════════════════════════ */
+@media (min-width: 900px) {
+  html, body {
+    background:
+      radial-gradient(circle at 15% 12%, rgba(0,168,232,.10), transparent 42%),
+      radial-gradient(circle at 88% 82%, rgba(253,185,19,.08), transparent 42%),
+      linear-gradient(160deg, #eef2f7 0%, #dde5ee 55%, #d3dce8 100%);
+  }
+  body.dark-mode {
+    background:
+      radial-gradient(circle at 15% 12%, rgba(0,168,232,.09), transparent 42%),
+      radial-gradient(circle at 88% 82%, rgba(253,185,19,.06), transparent 42%),
+      linear-gradient(160deg, #0a0f16 0%, #0d1622 55%, #0a1420 100%);
+  }
+
+  #screen-splash, #screen-login, #screen-onboarding, #screen-app,
+  .modal-overlay, .e4-overlay, .e4-conf-overlay, .e4-alt-modal, .e4-processing {
+    left: 50% !important;
+    right: auto !important;
+    top: 50% !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: 430px !important;
+    height: 900px !important;
+    max-height: 94vh !important;
+  }
+  .e4-processing { transform: none !important; position: absolute !important; inset: 0 !important; left:0 !important; top:0 !important; width:100% !important; height:100% !important; }
+
+  #screen-splash, #screen-login, #screen-onboarding, #screen-app {
+    border-radius: 30px !important;
+    overflow: hidden !important;
+    box-shadow:
+      0 40px 90px rgba(0,20,50,.32),
+      0 0 0 8px #0b1420,
+      0 0 0 11px #263548;
+  }
+  .modal-overlay, .e4-alt-modal { border-radius: 0 !important; }
+  .e4-overlay, .e4-conf-overlay { border-radius: 30px !important; overflow: hidden !important; }
+
+  /* Selo discreto do app atrás do cartão, para preencher o fundo */
+  body::before {
+    content: 'NOTA MESTRA · CORREÇÃO';
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    font-family: var(--font); font-size: 12px; font-weight: 700;
+    letter-spacing: .18em; color: rgba(0,43,92,.28);
+    pointer-events: none; z-index: 0;
+  }
+  body.dark-mode::before { color: rgba(255,255,255,.12); }
+}
+
 </style>
 </head>
 <body>
