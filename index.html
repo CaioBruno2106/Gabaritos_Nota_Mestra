@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0D2137">
-<title>Nota Mestra - Leitor de Gabaritos</title>
+<title>Correção Mestra</title>
 <!-- build: v7 (Etapa 7 — Exportação JSON para Nota Mestra, formato de backup por turma, prova ou atividade) -->
 <!-- build anterior: v7a (Etapa A — Arquivar provas · Excluir correções · Nota por disciplina na conferência) -->
 
@@ -1550,12 +1550,8 @@ async function confirmaArquivarProva(id, arquivar) {
   } catch (e) { toast('Erro: '+e.message, 'error'); }
 }
 
-/* Limpa o cache ao trocar de escola (sign out) */
-const _origSignOut = signOut;
-signOut = async function() {
-  cache.turmas = cache.alunos = cache.provas = null;
-  return _origSignOut();
-};
+/* Limpeza de cache ao trocar de escola/sair é feita dentro de signOut(),
+   mais abaixo — ver comentário "cache local" na função signOut(). */
 
 </script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -3220,6 +3216,7 @@ function showScreen(id) {
     target.classList.add('screen-enter');
     setTimeout(() => target.classList.remove('screen-enter'), 400);
   }
+  if (id === 'screen-login' && typeof resetGoogleLoginButton === 'function') resetGoogleLoginButton();
 }
 
 function toast(msg, type = '') {
@@ -3262,26 +3259,41 @@ function initials(name) {
    AUTH
 ═══════════════════════════════════════════ */
 // Login Google
+const GOOGLE_BTN_HTML = `<svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Continuar com Google`;
+
+/* Garante que o botão do Google nunca fique "preso" em estado de carregando —
+   chamada sempre que a tela de login é exibida (defesa extra, além dos
+   pontos onde já resetamos manualmente no sucesso/erro/cancelamento). */
+function resetGoogleLoginButton() {
+  const btn = document.getElementById('btn-google-login');
+  if (btn) { btn.disabled = false; btn.innerHTML = GOOGLE_BTN_HTML; }
+}
+
 document.getElementById('btn-google-login').onclick = async () => {
-  /* 
-   * ANDROID WEBVIEW: este bloco precisará de bridge nativa (igual ao Nota Mestra).
-   * No Android Studio, intercepte window.LeituraAndroid.googleSignIn()
-   * e retorne o idToken via window.onGoogleIdToken(token).
-   * Por ora, usa signInWithPopup para testes no navegador.
+  /*
+   * ANDROID WEBVIEW: no Android Studio, MainActivity intercepta o clique
+   * via window.LeituraAndroid.googleSignIn() e devolve o idToken chamando
+   * window.onGoogleIdToken(token). Se o usuário cancelar o seletor de conta
+   * nativo, o Android deve chamar window.onGoogleSignInCancelled() para
+   * destravar o botão (ver MainActivity.kt).
+   * Fora do APK (navegador), usa signInWithPopup para testes.
    */
+  const btn = document.getElementById('btn-google-login');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="border-top-color:#4285F4"></div> Entrando...';
+
   if (window.LeituraAndroid?.googleSignIn) {
     window.LeituraAndroid.googleSignIn();
     return;
   }
-  const btn = document.getElementById('btn-google-login');
-  btn.disabled = true;
-  btn.innerHTML = '<div class="spinner" style="border-top-color:#4285F4"></div> Entrando...';
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     await auth.signInWithPopup(provider);
+    // sucesso: onAuthStateChanged navega para outra tela; o botão já não
+    // fica visível, mas deixamos resetado para o caso de um novo logout.
+    resetGoogleLoginButton();
   } catch (e) {
-    btn.disabled = false;
-    btn.innerHTML = `<svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Continuar com Google`;
+    resetGoogleLoginButton();
     toast('Erro ao entrar: ' + (e.message || 'tente novamente'), 'error');
   }
 };
@@ -3291,21 +3303,28 @@ window.onGoogleIdToken = async (idToken) => {
   try {
     const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
     await auth.signInWithCredential(credential);
+    resetGoogleLoginButton();
   } catch (e) {
+    resetGoogleLoginButton();
     toast('Erro ao autenticar: ' + e.message, 'error');
   }
+};
+
+// Bridge Android → usuário cancelou o seletor de conta nativo (sem erro)
+window.onGoogleSignInCancelled = () => {
+  resetGoogleLoginButton();
 };
 
 async function signOut() {
   try {
     await auth.signOut();
   } finally {
+    // Cache local por escola — evita mostrar turmas/alunos/provas da
+    // conta/escola anterior caso outra pessoa entre em seguida.
+    cache.turmas = cache.alunos = cache.provas = null;
+    if (typeof cacheRes !== 'undefined') cacheRes.items = null;
     // Restaura o botão do Google após o logout (seja bem ou mal-sucedido)
-    const btn = document.getElementById('btn-google-login');
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = `<svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg> Continuar com Google`;
-    }
+    resetGoogleLoginButton();
   }
 }
 
@@ -3580,6 +3599,29 @@ function showApp() {
 }
 
 /* ── Navegação ── */
+/* ─── Bridge Android: botão físico/gesto de voltar ───
+   MainActivity.onBackPressedDispatcher chama window.handleAndroidBack()
+   antes de decidir sair do app. Retorna true se algo foi fechado/navegado
+   aqui (Android não deve agir), ou false se o Android deve tratar (sair
+   do app, ou perguntar "toque de novo para sair" na tela inicial). */
+window.handleAndroidBack = function () {
+  const overlayIds = ['e4-cam-overlay', 'e4-alt-modal', 'lg-print-overlay', 'modal-overlay'];
+  for (const id of overlayIds) {
+    const el = document.getElementById(id);
+    if (el) {
+      if (id === 'e4-cam-overlay') { fecharCamera(); }
+      else { el.remove(); }
+      return true;
+    }
+  }
+  if (typeof app !== 'undefined' && app.currentNav && app.currentNav !== 'inicio' &&
+      document.getElementById('screen-app') && !document.getElementById('screen-app').classList.contains('hidden')) {
+    navTo('inicio');
+    return true;
+  }
+  return false;
+};
+
 function navTo(view) {
   app.currentNav = view;
   ['inicio','provas','turmas','alunos','mais'].forEach(v => {
@@ -4717,7 +4759,7 @@ function renderFormImportacaoNM() {
 
   const origemPicker = precisaEscolherOrigem ? `
     <div class="input-group">
-      <label class="input-label">Turma de origem (Leitor de Gabaritos)</label>
+      <label class="input-label">Turma de origem (Correção Mestra)</label>
       <select class="input" id="imp-nm-origem" onchange="_impNM.origemTurmaId=this.value">
         ${origensPossiveis.map(t => `
           <option value="${t.id}" ${t.id === _impNM.origemTurmaId ? 'selected' : ''}>${escapeHtml(t.nome)}</option>
@@ -5471,16 +5513,42 @@ async function gerarCartao(provaId) {
 
 /* ─────────────────────────────────────────────────
    DOWNLOADS
+   No navegador: baixa via <a download> normalmente.
+   No APK: WebView não tem gerenciador de downloads, então
+   entregamos o arquivo em base64 para window.AndroidApp.salvarBase64,
+   que grava em Downloads/ e mostra o toast de sucesso (ver MainActivity.kt).
 ───────────────────────────────────────────────── */
+function _utf8ToBase64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  bytes.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin);
+}
+
+/* dataUrl: string "data:<mime>;base64,<...>" (ex.: canvas.toDataURL(), pdf.output('datauristring')) */
+function baixarArquivo(dataUrl, filename) {
+  if (window.AndroidApp && window.AndroidApp.salvarBase64) {
+    const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
+    if (m) {
+      window.AndroidApp.salvarBase64(m[2], filename, m[1]);
+      toast(`${filename} salvo em Downloads`, 'success');
+      return;
+    }
+  }
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function downloadPNG() {
   const canvas = window._cartaoCanvas;
   const prova  = window._cartaoProva;
   if (!canvas) return;
   const slug = (prova.nome || 'cartao').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  const a = document.createElement('a');
-  a.download = `cartao_${slug}.png`;
-  a.href = canvas.toDataURL('image/png', 1.0);
-  a.click();
+  baixarArquivo(canvas.toDataURL('image/png', 1.0), `cartao_${slug}.png`);
   toast('PNG salvo!', 'success');
 }
 
@@ -5495,7 +5563,7 @@ function downloadPDF() {
   const [pW, pH] = land ? [210, 148] : [148, 210];
   pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, pW, pH);
   const slug = (prova.nome || 'cartao').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  pdf.save(`cartao_${slug}.pdf`);
+  baixarArquivo(pdf.output('datauristring'), `cartao_${slug}.pdf`);
   toast('PDF salvo!', 'success');
 }
 
@@ -7032,15 +7100,8 @@ function gerarJSONExportacaoNM() {
   const discLabel = discNome || prova.disciplina || '';
   const nomeArquivo = `Turma_${slug(turmaL)}_${slug(serie)}_${slug(discLabel)}_${prova.bimestre||'1'}_Bimestre_${slug(nivel)}_BKP.json`;
 
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const aTag = document.createElement('a');
-  aTag.href = url;
-  aTag.download = nomeArquivo;
-  document.body.appendChild(aTag);
-  aTag.click();
-  aTag.remove();
-  URL.revokeObjectURL(url);
+  const jsonStr = JSON.stringify(backup, null, 2);
+  baixarArquivo(`data:application/json;base64,${_utf8ToBase64(jsonStr)}`, nomeArquivo);
 
   closeModal();
   toast('JSON exportado!', 'success');
@@ -7592,18 +7653,7 @@ async function abrirBoletimAluno(alunoId) {
   setTimeout(tryPatch, 2000);
 })();
 
-/* ─────────────────────────────────────────
-   HOOK: invalida cacheRes na troca de escola
-───────────────────────────────────────── */
-(function patchSignOutForRes(){
-  if (typeof signOut === 'function') {
-    const _orig = signOut;
-    signOut = async function() {
-      cacheRes.items = null;
-      return _orig();
-    };
-  }
-})();
+/* A limpeza de cacheRes ao sair já é feita dentro de signOut() (ver AUTH). */
 </script>
 
 
@@ -8108,7 +8158,7 @@ function _lgPdfCabecalho(prova, subtitulo, turmaFiltro){
   }
   return `
   <div class="pe-faixa">
-    <h1>Leitor de <span>Gabaritos</span></h1>
+    <h1>Correção <span>Mestra</span></h1>
     <p>${subtitulo}</p>
   </div>
   <div class="pe-tricolor"><span class="y"></span><span class="r"></span><span class="c"></span></div>
@@ -8122,7 +8172,7 @@ function _lgPdfCabecalho(prova, subtitulo, turmaFiltro){
 
 function _lgPdfRodape(){
   return `<div class="rodape">
-    <div>Emitido em ${_lgPdfHoje()} · Leitor de Gabaritos</div>
+    <div>Emitido em ${_lgPdfHoje()} · Correção Mestra</div>
     <div class="ass">Assinatura do(a) professor(a)</div>
   </div>`;
 }
@@ -8139,7 +8189,7 @@ function _lgAbrirJanelaImpressao(html, orientacao){
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Leitor de Gabaritos — Impressão</title>
+<title>Correção Mestra — Impressão</title>
 ${style}
 <style>body{padding:10mm 8mm;} .no-print{display:none!important;} @media print{.no-print{display:none!important;}}
 [data-lucide] svg{width:1em;height:1em;stroke-width:2px;stroke:currentColor;vertical-align:-0.15em;}</style>
